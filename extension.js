@@ -124,6 +124,12 @@ export default class BurnMyWindows extends Extension {
         // If the profile migration fails for some reason, the callback will create a
         // default profile instead.
         fromVersion26(this.metadata).finally(() => {
+          // The migration is asynchronous, so the extension may have been disabled
+          // while it was running. In that case _settings is already null and the
+          // profile signal handlers would leak.
+          if (!this._enabled)
+            return;
+
           this._loadProfiles();
           this._settings.set_int('last-extension-version', this.metadata.version);
         });
