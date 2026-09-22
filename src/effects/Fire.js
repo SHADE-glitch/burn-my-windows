@@ -121,6 +121,8 @@ export default class Effect {
     dialog.bindColorButton('fire-color-4');
     dialog.bindColorButton('fire-color-5');
 
+    const switchWidget = dialog.getBuilder().get_object('fire-random-color');
+
     // Connect the buttons only once. The bindPreferences can be called multiple times...
     if (!Effect._isConnected) {
       Effect._isConnected = true;
@@ -136,6 +138,15 @@ export default class Effect {
 
       // Initialize the fire-preset dropdown.
       Effect._createFirePresets(dialog);
+
+      if (switchWidget) {
+        // Connect to the "state-set" signal to update preferences dynamically based on
+        // the switch state.
+        switchWidget.connect('state-set', (widget, state) => {
+          enableDisableColorButtons(dialog,
+                                    state);  // Update sensitivity when the state changes.
+        });
+      }
     }
 
     // enables and disables the color buttons
@@ -146,15 +157,7 @@ export default class Effect {
       }
     }
 
-    const switchWidget = dialog.getBuilder().get_object('fire-random-color');
     if (switchWidget) {
-      // Connect to the "state-set" signal to update preferences dynamically based on
-      // the switch state.
-      switchWidget.connect('state-set', (widget, state) => {
-        enableDisableColorButtons(dialog,
-                                  state);  // Update sensitivity when the state changes.
-      });
-
       // Manually call the update function on startup, using the initial state of the
       // switch.
       const initialState =

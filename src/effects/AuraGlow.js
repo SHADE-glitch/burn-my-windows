@@ -124,14 +124,6 @@ export default class Effect {
       dialog.getBuilder().get_object('aura-glow-hue-preview').queue_draw();
     }
 
-    dialog.getBuilder()
-      .get_object('aura-glow-start-hue-slider')
-      .connect('value-changed', redrawHuePreview);
-
-    dialog.getBuilder()
-      .get_object('aura-glow-saturation-slider')
-      .connect('value-changed', redrawHuePreview);
-
     // enable and disable the one slider
     function enableDisablePref(dialog, state) {
       dialog.getBuilder().get_object('aura-glow-start-hue-slider').set_sensitive(!state);
@@ -139,11 +131,24 @@ export default class Effect {
 
     const switchWidget = dialog.getBuilder().get_object('aura-glow-random-color');
 
-    // Connect to the "state-set" signal to update preferences dynamically based on
-    // the switch state.
-    switchWidget.connect('state-set', (widget, state) => {
-      enableDisablePref(dialog, state);  // Update sensitivity when the state changes.
-    });
+    // Connect the signals only once. The bindPreferences can be called multiple times...
+    if (!Effect._isConnected) {
+      Effect._isConnected = true;
+
+      dialog.getBuilder()
+        .get_object('aura-glow-start-hue-slider')
+        .connect('value-changed', redrawHuePreview);
+
+      dialog.getBuilder()
+        .get_object('aura-glow-saturation-slider')
+        .connect('value-changed', redrawHuePreview);
+
+      // Connect to the "state-set" signal to update preferences dynamically based on
+      // the switch state.
+      switchWidget.connect('state-set', (widget, state) => {
+        enableDisablePref(dialog, state);  // Update sensitivity when the state changes.
+      });
+    }
 
     // Manually call the update function on startup, using the initial state of the
     // switch.

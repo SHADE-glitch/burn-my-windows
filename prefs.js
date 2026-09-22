@@ -104,8 +104,16 @@ export default class BurnMyWindowsPreferences extends ExtensionPreferences {
     // Whenever the current effect profile changes, all connections are disconnected.
     this._profileConnections = [];
 
+    // These signal IDs are disconnected again in the 'destroy' handler below.
+    this._activeProfileSignalId = 0;
+    this._windowVisibleSignalId = 0;
+
+    // Guards the one-time initialization done in the 'realize' handler. The signal may be
+    // emitted more than once if the widget gets reparented.
+    this._realized = false;
+
     // Load the current effect profile. If there is none, we create a default profile.
-    this._settings.connect('changed::active-profile', () => {
+    this._activeProfileSignalId = this._settings.connect('changed::active-profile', () => {
       this._loadActiveProfile();
     });
 
@@ -307,6 +315,13 @@ export default class BurnMyWindowsPreferences extends ExtensionPreferences {
     // Some things can only be done once the widget is shown as we do not have access to
     // the toplevel widget before.
     this._widget.connect('realize', (widget) => {
+      // The 'realize' signal can be emitted more than once (e.g. when the widget is
+      // reparented). Everything below must run exactly once.
+      if (this._realized) {
+        return;
+      }
+      this._realized = true;
+
       const window = widget.get_root();
 
       // Show the version number in the title bar.
@@ -341,7 +356,7 @@ export default class BurnMyWindowsPreferences extends ExtensionPreferences {
       // Count the number of times the user has opened the preferences window. Every now
       // and then, we show a dialog asking the user to support the extension. We connect
       // to the notify::visible signal to ensure that the dialog can be a modal dialog.
-      window.connect('notify::visible', (window) => {
+      this._windowVisibleSignalId = window.connect('notify::visible', (window) => {
         // Do not show the dialog when the window is hidden.
         if (!window.get_visible()) {
           return;
@@ -548,6 +563,19 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
     // As we do not have something like a destructor, we just listen for the destroy
     // signal of our main widget.
     this._widget.connect('destroy', () => {
+      // Disconnect from the general settings and the toplevel window.
+      if (this._activeProfileSignalId) {
+        this._settings.disconnect(this._activeProfileSignalId);
+        this._activeProfileSignalId = 0;
+      }
+      if (this._windowVisibleSignalId) {
+        window.disconnect(this._windowVisibleSignalId);
+        this._windowVisibleSignalId = 0;
+      }
+
+      // Disconnect all connections to the currently active effect profile.
+      this._disconnectProfileSettings();
+
       // Unregister our resources.
       Gio.resources_unregister(this._resources);
 
