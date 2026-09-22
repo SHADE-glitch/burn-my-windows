@@ -78,6 +78,7 @@ export default class BurnMyWindows extends Extension {
     // synchronously below; on autologin boot those services may not be up yet,
     // and the sync construction blocks past GDM's ~12s fallback-greeter timeout.
     this._deferredEnableId = null;
+    this._activeProfileSignalId = null;
     this._enabled = false;
     this._deferredEnableId = GLib.timeout_add(GLib.PRIORITY_LOW, 4000, () => {
       if (this._enabled)
@@ -129,7 +130,7 @@ export default class BurnMyWindows extends Extension {
     // We reload all effect profiles whenever the currently edited profile in the
     // preferences dialog changes. This is most likely a bit too often, but it will also
     // happen whenever a new profile is created and whenever an old profile is deleted.
-    this._settings.connect('changed::active-profile', () => {
+    this._activeProfileSignalId = this._settings.connect('changed::active-profile', () => {
       this._loadProfiles();
     });
 
@@ -387,6 +388,18 @@ export default class BurnMyWindows extends Extension {
     WindowPreview.prototype._deleteAll = this._origDeleteAll;
     WindowPreview.prototype._restack   = this._origRestack;
     WindowPreview.prototype._init      = this._origInit;
+
+    // Disconnect the active-profile handler. This has to happen before we drop the
+    // settings reference below. Otherwise the handler would outlive disable() and
+    // re-create the per-profile signal handlers on every profile switch.
+    if (this._settings && this._activeProfileSignalId !== null) {
+      try {
+        this._settings.disconnect(this._activeProfileSignalId);
+      } catch (_e) {
+        // Settings object may have been destroyed.
+      }
+      this._activeProfileSignalId = null;
+    }
 
     this._settings = null;
   }
