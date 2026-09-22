@@ -1,0 +1,11 @@
+<!--
+SPDX-FileCopyrightText: Simon Schneegans <code@simonschneegans.de>
+SPDX-License-Identifier: CC0-1.0
+-->
+
+<node>
+    <interface name="org.freedesktop.UPower">
+        <property name="OnBattery" type="b" access="read" />
+    </interface>
+</node>
+  
