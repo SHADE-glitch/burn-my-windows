@@ -73,14 +73,16 @@ export default class BurnMyWindows extends Extension {
   // from GNOME Tweaks, when you log in or when the screen is unlocked.
   enable() {
 
-    // GDM autologin hardening (local fork): defer the heavy enable() off the
-    // shell startup path. The UPower/PowerProfiles DBus proxies are constructed
-    // synchronously below; on autologin boot those services may not be up yet,
-    // and the sync construction blocks past GDM's ~12s fallback-greeter timeout.
+    // GDM autologin hardening (local fork): defer enable() slightly off the shell
+    // startup path. The original 4s delay existed because the UPower/PowerProfiles
+    // DBus proxies were constructed synchronously here, which could block past GDM's
+    // ~12s fallback-greeter timeout on autologin boot. Those proxies are now created
+    // lazily on first use (see _getUpowerProxy / _getPowerProfilesProxy), so the long
+    // delay is no longer needed. A short delay is kept as a small safety margin.
     this._deferredEnableId = null;
     this._activeProfileSignalId = null;
     this._enabled = false;
-    this._deferredEnableId = GLib.timeout_add(GLib.PRIORITY_LOW, 4000, () => {
+    this._deferredEnableId = GLib.timeout_add(GLib.PRIORITY_LOW, 1000, () => {
       if (this._enabled)
         return GLib.SOURCE_REMOVE;
       this._deferredEnableId = null;
