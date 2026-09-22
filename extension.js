@@ -494,10 +494,14 @@ export default class BurnMyWindows extends Extension {
   // Lazily create the UPower D-Bus proxy to avoid blocking during startup.
   _getUpowerProxy() {
     if (!this._upowerProxy) {
-      const UPowerProxy = Gio.DBusProxy.makeProxyWrapper(
-        utils.getStringResource('/interfaces/org.freedesktop.UPower.xml'));
-      this._upowerProxy = new UPowerProxy(Gio.DBus.system, 'org.freedesktop.UPower',
-                                          '/org/freedesktop/UPower');
+      try {
+        const UPowerProxy = Gio.DBusProxy.makeProxyWrapper(
+          utils.getStringResource('/interfaces/org.freedesktop.UPower.xml'));
+        this._upowerProxy = new UPowerProxy(Gio.DBus.system, 'org.freedesktop.UPower',
+                                            '/org/freedesktop/UPower');
+      } catch (_e) {
+        // Service may be unavailable (masked, or still starting up); leave as null.
+      }
     }
     return this._upowerProxy;
   }
@@ -579,7 +583,8 @@ export default class BurnMyWindows extends Extension {
       // (e.g. resources/ui/adw/prefs.ui).
       const animationType = forOpening ? 1 : 2;
       const windowType    = isNormalWindow ? 1 : 2;
-      const powerMode     = this._getUpowerProxy().OnBattery ? 1 : 2;
+      // If UPower is unavailable, assume we are not on battery.
+      const powerMode     = this._getUpowerProxy()?.OnBattery ? 1 : 2;
 
       // Get the first profile whose constraints match the circumstances. The list is
       // sorted by priority, so we are good to take the first match.
