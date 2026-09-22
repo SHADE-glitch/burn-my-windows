@@ -98,9 +98,13 @@ export default class Effect {
         }
       });
 
-      // Make sure to drop the reference to the actor.
+      // Make sure to drop the references to the actor and the pointer position. Both
+      // are cleared together: the update handler is guarded by _startPointerPos but
+      // dereferences _actor, so leaving _startPointerPos set would let it dereference
+      // a null actor.
       shader.connect('end-animation', (shader) => {
-        shader._actor = null;
+        shader._actor           = null;
+        shader._startPointerPos = null;
       });
     });
   }

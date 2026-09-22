@@ -49,7 +49,10 @@ export default class Effect {
         'begin-animation', (shader, settings, forOpening, testMode, actor) => {
           // For this effect, we scale the actor vertically so that it covers the entire
           // screen. This ensures that the melted window will not be cut off.
-          let actorScale = 2.0 * Math.max(1.0, global.stage.height / actor.height);
+          // Clamp the actor height to avoid a division by zero for a not-yet-allocated
+          // window actor, which would yield an infinite scale.
+          const actorHeight = Math.max(1, actor.height);
+          let actorScale = 2.0 * Math.max(1.0, global.stage.height / actorHeight);
 
           // If we are currently performing integration test, nothing will be visible in
           // the test images as the animation has passed the center of the window already.
@@ -106,7 +109,8 @@ export default class Effect {
   // For this effect, we scale the actor vertically so that it covers the entire screen.
   // This ensures that the melted window will not be cut off.
   static getActorScale(settings, forOpening, actor) {
-    let actorScale = 2.0 * Math.max(1.0, global.stage.height / actor.height);
+    const actorHeight = Math.max(1, actor.height);
+    let actorScale = 2.0 * Math.max(1.0, global.stage.height / actorHeight);
     return {x: 1.0, y: actorScale};
   }
 }
