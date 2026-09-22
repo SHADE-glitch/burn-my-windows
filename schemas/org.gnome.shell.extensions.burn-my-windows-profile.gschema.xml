@@ -872,12 +872,6 @@ SPDX-License-Identifier: CC0-1.0
       <description>The time the mushroom effect takes.</description>
     </key>
 
-    <!-- <key name="mushroom-8bit-enable" type="b">
-      <default>true</default>
-      <summary>mushroom 8Bit Animation</summary>
-      <description>use the old style.</description>
-    </key> -->
-
     <key name="mushroom-scale-style" type="d">
       <default>1.0</default>
       <summary>8Bit or Smooth Scaling</summary>

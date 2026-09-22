@@ -126,7 +126,6 @@ export default class Effect {
   static bindPreferences(dialog) {
     // Empty for now... Code is added here later in the tutorial!
     dialog.bindAdjustment('mushroom-animation-time');
-    // dialog.bindSwitch('mushroom-8bit-enable');
 
     dialog.bindAdjustment('mushroom-scale-style');
 

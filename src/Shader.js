@@ -74,7 +74,6 @@ export var Shader = GObject.registerClass({
 
     // These will be updated during the animation.
     this._progress = 0;
-    this._time     = 0;
 
     // Store standard uniform locations.
     this._uForOpening   = this.get_uniform_location('uForOpening');

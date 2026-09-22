@@ -53,13 +53,6 @@ import Wisps from './src/effects/Wisps.js';
 
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
-// Currently, the extension supports only one set of UI files. In the past, there were
-// three different sets for GTK3, GTK4, and Adwaita. This method returns the name of the
-// current UI directory. It's still here since it might be useful in the future.
-function getUIDir() {
-  return 'adw';
-}
-
 //////////////////////////////////////////////////////////////////////////////////////////
 // The preferences dialog is organized in pages, each of which is loaded from a         //
 // separate ui file. There's one page with general options, all other paged are loaded  //
@@ -98,7 +91,7 @@ export default class BurnMyWindowsPreferences extends ExtensionPreferences {
     // Load the general user interface files.
     this._builder = new Gtk.Builder();
     this._builder.add_from_resource(`/ui/common/menus.ui`);
-    this._builder.add_from_resource(`/ui/${getUIDir()}/prefs.ui`);
+    this._builder.add_from_resource(`/ui/adw/prefs.ui`);
 
 
     // Store a reference to the general settings object.
@@ -233,7 +226,7 @@ export default class BurnMyWindowsPreferences extends ExtensionPreferences {
       const [minMajor, minMinor] = effect.getMinShellVersion();
       if (utils.shellVersionIsAtLeast(minMajor, minMinor)) {
 
-        const uiFile = `/ui/${getUIDir()}/${effect.getNick()}.ui`;
+        const uiFile = `/ui/adw/${effect.getNick()}.ui`;
 
         // Is there a better way to test for the existence of a resource file?
         let hasPrefs = false;
