@@ -89,6 +89,14 @@ export default class BurnMyWindows extends Extension {
         this._enabled = true;
       } catch (e) {
         console.warn(`[burn-my-windows@local] deferred enable failed: ${e}`);
+        // Undo whatever _doEnable() managed to install before it threw. Without
+        // this, disable() would return early (_enabled is still false) and the
+        // monkey-patches would stay in place until the shell is restarted.
+        try {
+          this._doDisable();
+        } catch (_e) {
+          // Nothing more we can do here.
+        }
       }
       return GLib.SOURCE_REMOVE;
     });
@@ -370,24 +378,43 @@ export default class BurnMyWindows extends Extension {
     // Free all effect resources.
     this._ALL_EFFECTS = [];
 
+    // The blocks below undo whatever _doEnable() managed to install. Each step is
+    // guarded because _doDisable() may also be reached after a partially failed
+    // _doEnable(), in which case most of these fields are still undefined.
+    // Assigning undefined to the patched methods would break the shell.
+
     // Unregister our resources.
-    Gio.resources_unregister(this._resources);
+    if (this._resources) {
+      Gio.resources_unregister(this._resources);
+    }
 
     // Disable the window-picking D-Bus API.
-    this._windowPicker.unexport();
+    if (this._windowPicker) {
+      this._windowPicker.unexport();
+    }
 
-    global.window_manager.disconnect(this._killEffectsSignal);
+    if (this._killEffectsSignal) {
+      global.window_manager.disconnect(this._killEffectsSignal);
+    }
 
     // Restore the original window-open and window-close animations.
-    Workspace.prototype._addWindowClone = this._origAddWindowClone;
-    Workspace.prototype._windowRemoved  = this._origWindowRemoved;
-    Workspace.prototype._doRemoveWindow = this._origDoRemoveWindow;
-    Main.wm._shouldAnimateActor         = this._origShouldAnimateActor;
-    Main.wm._waitForOverviewToHide      = this._origWaitForOverviewToHide;
+    if (this._origAddWindowClone)
+      Workspace.prototype._addWindowClone = this._origAddWindowClone;
+    if (this._origWindowRemoved)
+      Workspace.prototype._windowRemoved = this._origWindowRemoved;
+    if (this._origDoRemoveWindow)
+      Workspace.prototype._doRemoveWindow = this._origDoRemoveWindow;
+    if (this._origShouldAnimateActor)
+      Main.wm._shouldAnimateActor = this._origShouldAnimateActor;
+    if (this._origWaitForOverviewToHide)
+      Main.wm._waitForOverviewToHide = this._origWaitForOverviewToHide;
 
-    WindowPreview.prototype._deleteAll = this._origDeleteAll;
-    WindowPreview.prototype._restack   = this._origRestack;
-    WindowPreview.prototype._init      = this._origInit;
+    if (this._origDeleteAll)
+      WindowPreview.prototype._deleteAll = this._origDeleteAll;
+    if (this._origRestack)
+      WindowPreview.prototype._restack = this._origRestack;
+    if (this._origInit)
+      WindowPreview.prototype._init = this._origInit;
 
     // Disconnect the active-profile handler. This has to happen before we drop the
     // settings reference below. Otherwise the handler would outlive disable() and
