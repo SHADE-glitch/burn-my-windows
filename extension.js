@@ -298,10 +298,14 @@ export default class BurnMyWindows extends Extension {
       realWindow._bmwOverviewClone          = clone;
       realWindow._bmwOverviewCloneContainer = container;
 
-      // Remove the temporary members again once the clone is deleted.
+      // Remove the temporary members again once the clone is deleted. Only
+      // clear them if they still point at this clone: a newer overview open
+      // may have replaced them while this container died late.
       container.connect('destroy', () => {
-        delete realWindow._bmwOverviewClone;
-        delete realWindow._bmwOverviewCloneContainer;
+        if (realWindow._bmwOverviewClone === clone) {
+          delete realWindow._bmwOverviewClone;
+          delete realWindow._bmwOverviewCloneContainer;
+        }
       });
 
       return clone;
