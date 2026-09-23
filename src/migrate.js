@@ -14,6 +14,8 @@
 
 'use strict';
 
+import GLib from 'gi://GLib';
+
 import {ProfileManager} from './ProfileManager.js';
 import * as utils from './utils.js';
 
@@ -35,6 +37,31 @@ export async function fromVersion26(metadata) {
 
       // We use this to write the new profiles.
       const profileManager = new ProfileManager(metadata);
+
+      // Snapshot existing profiles so a retried migration (e.g. after the
+      // extension was disabled mid-migration and the version was never
+      // bumped) does not create duplicates.
+      const existingContents = new Set();
+      profileManager.getProfiles().forEach(p => {
+        try {
+          const [ok, contents] = GLib.file_get_contents(p.path);
+          if (ok) {
+            existingContents.add(new TextDecoder().decode(contents).trim());
+          }
+        } catch (_e) {
+          // Unreadable profile; a duplicate next to it is harmless.
+        }
+      });
+
+      // Creates a profile unless identical content already exists.
+      const createProfileOnce = (content) => {
+        if (existingContents.has(content.trim())) {
+          utils.debug('Skipping duplicate profile migration.');
+          return;
+        }
+        profileManager.createProfile(content);
+        existingContents.add(content.trim());
+      };
 
       // The default value of this was false, so not-present is equal to false.
       const destroyDialogs = r.includes('destroy-dialogs=true');
@@ -144,7 +171,7 @@ export async function fromVersion26(metadata) {
         utils.debug('The new profile:');
         utils.debug(profile);
 
-        profileManager.createProfile(profile);
+        createProfileOnce(profile);
 
       } else if (closeEffects.length == 0) {
 
@@ -166,7 +193,7 @@ export async function fromVersion26(metadata) {
         utils.debug('The new window-open profile:');
         utils.debug(profile);
 
-        profileManager.createProfile(profile);
+        createProfileOnce(profile);
 
       } else if (openEffects.length == 0) {
 
@@ -188,7 +215,7 @@ export async function fromVersion26(metadata) {
         utils.debug('The new window-close profile:');
         utils.debug(profile);
 
-        profileManager.createProfile(profile);
+        createProfileOnce(profile);
 
 
       } else {
@@ -219,8 +246,8 @@ export async function fromVersion26(metadata) {
         utils.debug('The new close-window profile:');
         utils.debug(closeProfile);
 
-        profileManager.createProfile(openProfile);
-        profileManager.createProfile(closeProfile);
+        createProfileOnce(openProfile);
+        createProfileOnce(closeProfile);
       }
     })
     .catch(r => utils.debug('Failed to migrate settings: ' + r));
