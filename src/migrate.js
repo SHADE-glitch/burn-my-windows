@@ -25,7 +25,10 @@ import * as utils from './utils.js';
 export async function fromVersion26(metadata) {
   return utils
     .executeCommand(['dconf', 'dump', '/org/gnome/shell/extensions/burn-my-windows/'])
-    .catch(r => utils.debug('Failed to get old settings for effect migration: ' + r))
+    .catch(r => {
+      utils.debug('Failed to get old settings for effect migration: ' + r);
+      return '';
+    })
     .then(r => {
       // If there were no settings before, we do not have to migrate anything. Just use
       // the new defaults.

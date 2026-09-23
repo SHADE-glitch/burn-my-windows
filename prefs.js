@@ -589,7 +589,7 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
 
       // If the settings dialog got closed too quickly, this may not have been shown.
       if (this._showUpdateInfoTimeout) {
-        GLib.source_remove(this._showUpdateInfoTimeout);
+        GLib.Source.remove(this._showUpdateInfoTimeout);
       }
     });
 
@@ -931,7 +931,7 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
   // message and a list of buttons. Each button is an object with a label, a default flag
   // and a destructive flag. Each button object can also have an "action" callback that is
   // called when the button is clicked.
-  // This method works on GTK3, GTK4, and libadwaita.
+  // This method works with GTK4 and libadwaita.
   _createMessageDialog(title, message, window, buttons) {
     let dialog = new Adw.MessageDialog({
       heading: title,
