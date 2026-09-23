@@ -108,6 +108,10 @@ export default class BurnMyWindowsPreferences extends ExtensionPreferences {
     this._activeProfileSignalId = 0;
     this._windowVisibleSignalId = 0;
 
+    // The toplevel window behind 'notify::visible'. Stored explicitly so that the
+    // 'destroy' handler disconnects from the exact object 'realize' connected to.
+    this._prefsWindow = null;
+
     // Guards the one-time initialization done in the 'realize' handler. The signal may be
     // emitted more than once if the widget gets reparented.
     this._realized = false;
@@ -323,6 +327,7 @@ export default class BurnMyWindowsPreferences extends ExtensionPreferences {
       this._realized = true;
 
       const window = widget.get_root();
+      this._prefsWindow = window;
 
       // Show the version number in the title bar.
       window.set_title(`Burn-My-Windows ${this.metadata.version}`);
@@ -569,7 +574,7 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
         this._activeProfileSignalId = 0;
       }
       if (this._windowVisibleSignalId) {
-        window.disconnect(this._windowVisibleSignalId);
+        this._prefsWindow.disconnect(this._windowVisibleSignalId);
         this._windowVisibleSignalId = 0;
       }
 
