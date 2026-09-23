@@ -183,6 +183,13 @@ export default class Effect {
   // This populates the preset dropdown menu for the fire options.
   static _createFirePresets(dialog) {
     dialog.getBuilder().get_object('fire-prefs').connect('realize', (widget) => {
+      // Realize can fire more than once (e.g. on reparent); build the menu
+      // and actions only the first time.
+      if (widget._bmwPresetsInit) {
+        return;
+      }
+      widget._bmwPresetsInit = true;
+
       const presets = [
         {
           name: _('Default Fire'),

@@ -191,6 +191,13 @@ export default class Effect {
     dialog.getBuilder()
       .get_object('mushroom-star-color-preset-button')
       .connect('realize', (widget) => {
+        // Realize can fire more than once (e.g. on reparent); build the menu
+        // and actions only the first time.
+        if (widget._bmwPresetsInit) {
+          return;
+        }
+        widget._bmwPresetsInit = true;
+
         // Define an array of color presets, each with a name and six color values (RGBA
         // format).
         const presets = [
