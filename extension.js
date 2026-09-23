@@ -73,35 +73,49 @@ export default class BurnMyWindows extends Extension {
   // from GNOME Tweaks, when you log in or when the screen is unlocked.
   enable() {
 
-    // GDM autologin hardening (local fork): defer enable() slightly off the shell
-    // startup path. The original 4s delay existed because the UPower/PowerProfiles
-    // DBus proxies were constructed synchronously here, which could block past GDM's
-    // ~12s fallback-greeter timeout on autologin boot. Those proxies are now created
-    // lazily on first use (see _getUpowerProxy / _getPowerProfilesProxy), so the long
-    // delay is no longer needed. A short delay is kept as a small safety margin.
+    // GDM autologin hardening (local fork): the original 4s delay existed
+    // because the UPower/PowerProfiles DBus proxies were constructed
+    // synchronously here, which could block past GDM's ~12s fallback-greeter
+    // timeout on autologin boot. Those proxies are now created lazily on first
+    // use (see _getUpowerProxy / _getPowerProfilesProxy), so _doEnable() no
+    // longer blocks on external services and runs synchronously: window
+    // animations work immediately after login/unlock. If the shell is still
+    // too early in startup and this throws, a deferred retry is kept as a
+    // safety net.
     this._deferredEnableId = null;
     this._activeProfileSignalId = null;
     this._enabled = false;
+    if (this._tryEnable()) {
+      return;
+    }
     this._deferredEnableId = GLib.timeout_add(GLib.PRIORITY_LOW, 1000, () => {
-      if (this._enabled)
-        return GLib.SOURCE_REMOVE;
       this._deferredEnableId = null;
-      try {
-        this._doEnable();
-        this._enabled = true;
-      } catch (e) {
-        console.warn(`[burn-my-windows@local] deferred enable failed: ${e}`);
-        // Undo whatever _doEnable() managed to install before it threw. Without
-        // this, disable() would return early (_enabled is still false) and the
-        // monkey-patches would stay in place until the shell is restarted.
-        try {
-          this._doDisable();
-        } catch (_e) {
-          // Nothing more we can do here.
-        }
-      }
+      this._tryEnable();
       return GLib.SOURCE_REMOVE;
     });
+  }
+
+  // Runs _doEnable() once, undoing partial state on failure. Returns whether
+  // the extension is now enabled.
+  _tryEnable() {
+    if (this._enabled) {
+      return true;
+    }
+    try {
+      this._doEnable();
+      this._enabled = true;
+    } catch (e) {
+      console.warn(`[burn-my-windows@local] enable failed: ${e}`);
+      // Undo whatever _doEnable() managed to install before it threw. Without
+      // this, disable() would return early (_enabled is still false) and the
+      // monkey-patches would stay in place until the shell is restarted.
+      try {
+        this._doDisable();
+      } catch (_e) {
+        // Nothing more we can do here.
+      }
+    }
+    return this._enabled;
   }
 
   _doEnable() {
