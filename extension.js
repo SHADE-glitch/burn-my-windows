@@ -685,6 +685,11 @@ export default class BurnMyWindows extends Extension {
   _chooseEffect(actor, forOpening) {
     this._ensureEffects();
 
+    // The actor may outlive its window during teardown races.
+    if (!actor.meta_window) {
+      return null;
+    }
+
     // For now, we only add effects to normal windows and dialog windows.
     const isNormalWindow = actor.meta_window.window_type == Meta.WindowType.NORMAL;
     const isDialogWindow =
@@ -727,6 +732,9 @@ export default class BurnMyWindows extends Extension {
       // (e.g. resources/ui/adw/prefs.ui).
       const animationType = forOpening ? 1 : 2;
       const windowType    = isNormalWindow ? 1 : 2;
+      // Power state is sampled on each window animation, so (un)plugging or
+      // switching power modes takes effect on the next animation. This
+      // polling is intentional to avoid permanent D-Bus subscriptions.
       // If UPower is unavailable, assume we are not on battery.
       const powerMode     = this._getUpowerProxy()?.OnBattery ? 1 : 2;
 
