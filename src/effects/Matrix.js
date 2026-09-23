@@ -72,6 +72,7 @@ export default class Effect {
       // https://gitlab.gnome.org/GNOME/mutter/-/blob/gnome-3-36/clutter/clutter/clutter-offscreen-effect.c#L598
       shader.connect('update-animation', (shader) => {
         const pipeline = shader.get_pipeline();
+        if (!pipeline) return;
 
         // Bind the font texture.
         pipeline.set_layer_texture(1, this._fontTexture.get_texture());

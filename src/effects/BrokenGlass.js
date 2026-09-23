@@ -97,6 +97,7 @@ export default class Effect {
       // https://gitlab.gnome.org/GNOME/mutter/-/blob/gnome-3-36/clutter/clutter/clutter-offscreen-effect.c#L598
       shader.connect('update-animation', (shader) => {
         const pipeline = shader.get_pipeline();
+        if (!pipeline) return;
 
         // Use linear filtering for the window texture.
         pipeline.set_layer_filters(0, Cogl.PipelineFilter.LINEAR,
