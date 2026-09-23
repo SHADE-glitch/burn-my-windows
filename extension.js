@@ -496,6 +496,9 @@ export default class BurnMyWindows extends Extension {
     const profileManager = new ProfileManager(this.metadata);
     this._profiles       = profileManager.getProfiles();
 
+    // The enabled-effect cache below needs the effect objects to exist.
+    this._ensureEffects();
+
     // Whenever the properties of a profile is changed in the settings, we may have to
     // resort all profiles according to their priority.
     const updatePriority = (p) => {
@@ -516,6 +519,15 @@ export default class BurnMyWindows extends Extension {
         const signalId = p.settings.connect('changed::' + key, () => updatePriority(p));
         this._profileSignalIds.push({settings: p.settings, signalId});
       });
+
+      // Cache the enabled effects so window animations do not have to read
+      // two dozen settings keys on every open/close. The generic handler
+      // keeps the cache fresh whenever any key of the profile changes.
+      p.enabledEffects = this._buildEnabledEffects(p);
+      const enabledSignalId = p.settings.connect('changed', () => {
+        p.enabledEffects = this._buildEnabledEffects(p);
+      });
+      this._profileSignalIds.push({settings: p.settings, signalId: enabledSignalId});
     });
 
     // Sort all profiles initially according to their initial priority.
@@ -523,6 +535,18 @@ export default class BurnMyWindows extends Extension {
 
     // Pre-compile shaders for newly enabled effects during idle time.
     this._warmShaders();
+  }
+
+  // Returns the effect objects enabled in the given profile. The result is
+  // cached per profile (see _loadProfiles) instead of being recomputed on
+  // every window animation.
+  _buildEnabledEffects(p) {
+    if (!this._ALL_EFFECTS) {
+      return [];
+    }
+    return this._ALL_EFFECTS.filter(e => {
+      return p.settings.get_boolean(`${e.constructor.getNick()}-enable-effect`);
+    });
   }
 
   // Pre-compiles one shader per idle tick for each enabled effect which has not
@@ -758,11 +782,8 @@ export default class BurnMyWindows extends Extension {
       // If we found a matching profile, choose a random effect from it.
       if (profile) {
 
-        // Create a list of all enabled effects of this profile.
-        const enabled = this._ALL_EFFECTS.filter(e => {
-          return profile.settings.get_boolean(
-            `${e.constructor.getNick()}-enable-effect`);
-        });
+        // Pick from the cached list of enabled effects of this profile.
+        const enabled = profile.enabledEffects || [];
 
         // And then choose a random effect.
         if (enabled.length > 0) {
