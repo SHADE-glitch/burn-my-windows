@@ -7,6 +7,7 @@
 ![GNOME Shell](https://img.shields.io/badge/GNOME%20Shell-45--50-blue)
 ![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)
 ![Based on: Burn My Windows](https://img.shields.io/badge/based%20on-Burn%20My%20Windows-orange)
+[![Repository](https://img.shields.io/badge/repository-GitHub-black?logo=github)](https://github.com/SHADE-glitch/burn-my-windows)
 
 ## 项目说明
 
@@ -34,13 +35,20 @@
 本分支没有打包步骤，作为**本地扩展就地使用**：
 
 ```bash
-git clone <你的仓库地址> ~/.local/share/gnome-shell/extensions/burn-my-windows@local
+git clone https://github.com/SHADE-glitch/burn-my-windows.git ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 cd ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 make                     # 重新构建 GResource 包与 gschemas.compiled
 gnome-extensions enable burn-my-windows@local
 ```
 
 在 Wayland 下需注销后重新登录，GNOME Shell 才会加载扩展。
+
+### 卸载
+
+```bash
+gnome-extensions disable burn-my-windows@local
+rm -rf ~/.local/share/gnome-shell/extensions/burn-my-windows@local
+```
 
 ## 使用
 
@@ -82,3 +90,5 @@ gnome-extensions enable burn-my-windows@local
 本项目采用 **GNU 通用公共许可证 v3.0 或更高版本** —— 见 [LICENSE](LICENSE)。
 
 作为 Burn My Windows 的衍生作品，本分支继续沿用 GPL-3.0-or-later，并保留上游版权声明。
+
+© Simon Schneegans 及贡献者；分支修改 © SHADE-glitch。

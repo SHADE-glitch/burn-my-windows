@@ -7,6 +7,7 @@ Disintegrate your windows with style.
 ![GNOME Shell](https://img.shields.io/badge/GNOME%20Shell-45--50-blue)
 ![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)
 ![Based on: Burn My Windows](https://img.shields.io/badge/based%20on-Burn%20My%20Windows-orange)
+[![Repository](https://img.shields.io/badge/repository-GitHub-black?logo=github)](https://github.com/SHADE-glitch/burn-my-windows)
 
 ## About
 
@@ -34,13 +35,20 @@ It is **not** affiliated with or endorsed by the upstream author. The fork keeps
 This fork has no packaging step — it is used **in place** as a local extension:
 
 ```bash
-git clone <your-fork-url> ~/.local/share/gnome-shell/extensions/burn-my-windows@local
+git clone https://github.com/SHADE-glitch/burn-my-windows.git ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 cd ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 make                     # rebuild the GResource bundle and gschemas.compiled
 gnome-extensions enable burn-my-windows@local
 ```
 
 On Wayland you must log out and back in for GNOME Shell to load the extension.
+
+### Uninstall
+
+```bash
+gnome-extensions disable burn-my-windows@local
+rm -rf ~/.local/share/gnome-shell/extensions/burn-my-windows@local
+```
 
 ## Usage
 
@@ -82,3 +90,5 @@ This extension is a **maintenance fork** of **Burn My Windows** by **Simon Schne
 Licensed under the **GNU General Public License v3.0 or later** — see [LICENSE](LICENSE).
 
 As a derivative work of Burn My Windows, this fork remains under GPL-3.0-or-later and retains the upstream copyright notice.
+
+© Simon Schneegans and contributors; fork modifications © SHADE-glitch.
