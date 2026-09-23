@@ -110,6 +110,11 @@ export default class BurnMyWindows extends Extension {
     // constructing 26 ShaderFactory instances during startup.
     this._ALL_EFFECTS = null;
 
+    // Nicks of effects whose shaders have been pre-compiled, and the pending
+    // pre-compile idle source (if any). Both are reset on every enable.
+    this._warmedNicks = new Set();
+    this._warmId = 0;
+
     // Load all of our resources.
     this._resources =
       Gio.Resource.load(this.path + '/resources/burn-my-windows.gresource');
@@ -163,9 +168,29 @@ export default class BurnMyWindows extends Extension {
     // These D-Bus proxies are created lazily on first access to avoid blocking
     // during startup (UPower/PowerProfiles may not be ready on autologin).
     this._upowerProxy        = null;
+    this._upowerProxyChecked = false;
     this._powerProfilesProxy = null;
 
     // We will monkey-patch these methods. Let's store the original ones.
+    // Sentinel for GNOME upgrades: all patch targets below are private Shell
+    // APIs. If a future GNOME version renames or removes one of them, the
+    // effects would silently stop working. Warn loudly so the log points at
+    // the exact breakage. This check intentionally changes no behavior.
+    [
+      [Main.wm, '_shouldAnimateActor'],
+      [Main.wm, '_waitForOverviewToHide'],
+      [Workspace.prototype, '_addWindowClone'],
+      [Workspace.prototype, '_windowRemoved'],
+      [Workspace.prototype, '_doRemoveWindow'],
+      [WindowPreview.prototype, '_deleteAll'],
+      [WindowPreview.prototype, '_restack'],
+      [WindowPreview.prototype, '_init'],
+    ].forEach(([obj, name]) => {
+      if (typeof obj[name] !== 'function') {
+        console.warn(`[burn-my-windows@local] expected ${name} to be a function, ` +
+          `got ${typeof obj[name]}. Effects may not work on this GNOME version.`);
+      }
+    });
     this._origShouldAnimateActor    = Main.wm._shouldAnimateActor;
     this._origWaitForOverviewToHide = Main.wm._waitForOverviewToHide;
     this._origAddWindowClone        = Workspace.prototype._addWindowClone;
@@ -371,6 +396,12 @@ export default class BurnMyWindows extends Extension {
 
   _doDisable() {
 
+    // Cancel any pending shader pre-compile source.
+    if (this._warmId) {
+      try { GLib.Source.remove(this._warmId); } catch (_e) {}
+      this._warmId = 0;
+    }
+
     // Disconnect profile settings signal connections.
     if (this._profileSignalIds) {
       this._profileSignalIds.forEach(id => {
@@ -489,16 +520,87 @@ export default class BurnMyWindows extends Extension {
 
     // Sort all profiles initially according to their initial priority.
     this._profiles.sort((a, b) => b.priority - a.priority);
+
+    // Pre-compile shaders for newly enabled effects during idle time.
+    this._warmShaders();
+  }
+
+  // Pre-compiles one shader per idle tick for each enabled effect which has not
+  // been warmed yet, so the first real window animation does not hitch on GLSL
+  // compilation. This never blocks startup or animations: it runs at low idle
+  // priority with at most one shader per callback, a single failing effect is
+  // skipped in isolation, and the source removes itself once the queue is
+  // drained or the extension is disabled.
+  _warmShaders() {
+    // Drop any pending source from a previous profile load first.
+    if (this._warmId) {
+      try { GLib.Source.remove(this._warmId); } catch (_e) {}
+      this._warmId = 0;
+    }
+
+    this._ensureEffects();
+
+    const queue = [];
+    (this._profiles || []).forEach(p => {
+      this._ALL_EFFECTS.forEach(e => {
+        const nick = e.constructor.getNick();
+        if (!this._warmedNicks.has(nick) &&
+            p.settings.get_boolean(`${nick}-enable-effect`)) {
+          this._warmedNicks.add(nick);
+          queue.push(e);
+        }
+      });
+    });
+
+    if (queue.length == 0) {
+      return;
+    }
+
+    this._warmId = GLib.idle_add(GLib.PRIORITY_LOW, () => {
+      // The extension was disabled while warming: abort and clean up.
+      if (this._settings === null) {
+        this._warmId = 0;
+        return GLib.SOURCE_REMOVE;
+      }
+
+      const effect = queue.shift();
+      if (!effect) {
+        this._warmId = 0;
+        return GLib.SOURCE_REMOVE;
+      }
+
+      try {
+        // Creating the shader compiles its GLSL source; returning it to the
+        // factory makes it immediately reusable for real animations.
+        effect.shaderFactory.getShader().returnToFactory();
+      } catch (_e) {
+        // A single effect failing to compile must not break the rest.
+      }
+
+      if (queue.length == 0) {
+        this._warmId = 0;
+        return GLib.SOURCE_REMOVE;
+      }
+      return GLib.SOURCE_CONTINUE;
+    });
   }
 
   // Lazily create the UPower D-Bus proxy to avoid blocking during startup.
+  // Both the success and the failure are cached: constructing the proxy performs
+  // a synchronous D-Bus call, so retrying it on every window animation would
+  // stall the compositor repeatedly while UPower is unavailable.
   _getUpowerProxy() {
-    if (!this._upowerProxy) {
+    if (!this._upowerProxyChecked) {
+      this._upowerProxyChecked = true;
       try {
         const UPowerProxy = Gio.DBusProxy.makeProxyWrapper(
           utils.getStringResource('/interfaces/org.freedesktop.UPower.xml'));
-        this._upowerProxy = new UPowerProxy(Gio.DBus.system, 'org.freedesktop.UPower',
-                                            '/org/freedesktop/UPower');
+        const proxy = new UPowerProxy(Gio.DBus.system, 'org.freedesktop.UPower',
+                                      '/org/freedesktop/UPower');
+        // Only keep the proxy if the service actually owns its bus name.
+        if (proxy.get_name_owner() != null) {
+          this._upowerProxy = proxy;
+        }
       } catch (_e) {
         // Service may be unavailable (masked, or still starting up); leave as null.
       }
