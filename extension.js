@@ -728,19 +728,27 @@ export default class BurnMyWindows extends Extension {
             (profileColorScheme == 2 && colorScheme == 'prefer-dark');
         }
 
-        // Finally, we may also have to check the power profile.
-        if (matches && profilePowerProfile != 0 && this._getPowerProfilesProxy()) {
-          const powerProfile = this._getPowerProfilesProxy().ActiveProfile;
+        // Finally, we may also have to check the power profile. If the daemon
+        // is unavailable, the constraint cannot be verified, so a constrained
+        // profile must not match.
+        if (matches && profilePowerProfile != 0) {
+          const powerProfilesProxy = this._getPowerProfilesProxy();
 
-          // To understand the numbers, please refer to the indices in the Gtk.StringList
-          // of the profile-power-profile Adw.ComboRow in resources/ui/adw/prefs.ui.
-          if (powerProfile == 'power-saver') {
-            matches &= profilePowerProfile == 1 || profilePowerProfile == 4;
-          } else if (powerProfile == 'balanced') {
-            matches &= profilePowerProfile == 2 || profilePowerProfile == 4 ||
-              profilePowerProfile == 5;
+          if (!powerProfilesProxy) {
+            matches = false;
           } else {
-            matches &= profilePowerProfile == 3 || profilePowerProfile == 5;
+            const powerProfile = powerProfilesProxy.ActiveProfile;
+
+            // To understand the numbers, please refer to the indices in the Gtk.StringList
+            // of the profile-power-profile Adw.ComboRow in resources/ui/adw/prefs.ui.
+            if (powerProfile == 'power-saver') {
+              matches &= profilePowerProfile == 1 || profilePowerProfile == 4;
+            } else if (powerProfile == 'balanced') {
+              matches &= profilePowerProfile == 2 || profilePowerProfile == 4 ||
+                profilePowerProfile == 5;
+            } else {
+              matches &= profilePowerProfile == 3 || profilePowerProfile == 5;
+            }
           }
         }
 
