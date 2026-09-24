@@ -133,6 +133,13 @@ export default class BurnMyWindows extends Extension {
     this._warmedNicks = new Set();
     this._warmId = 0;
 
+    // Set once the WindowPreview/Workspace instance fields have been checked on
+    // the first real WindowPreview (see the _init override below). Deliberately
+    // an instance field and not a module-level one: GNOME caches this ES module
+    // for the whole shell process, so a module-level flag would warn only on the
+    // very first enable ever and stay silent afterwards.
+    this._previewFieldsWarned = false;
+
     // Load all of our resources.
     this._resources =
       Gio.Resource.load(this.path + '/resources/burn-my-windows.gresource');
@@ -420,6 +427,45 @@ export default class BurnMyWindows extends Extension {
       this.connect('destroy', () => {
         this.metaWindow.disconnect(connectionID);
       });
+
+      // Sentinel for the private instance fields we rely on. '_windowActor',
+      // '_icon' and '_closeRequested' are plain assignments in the original
+      // _init() above (windowPreview.js:48/:136/:130) and '_windows' in
+      // Workspace._init() (workspace.js:1090), so none of them exist on any
+      // prototype and none of them can be checked statically at enable time.
+      // The workspace is the second _init() argument (workspace.js:1337).
+      // 'window_container' is deliberately not repeated here: it is a GObject
+      // property and is already covered by the accessor check in _doEnable().
+      // Only 'in', typeof and Array.isArray are used below - none of them can
+      // throw or invoke a getter, which matters because this runs inside the
+      // most safety-critical patch in this file. Note that 'in' is the only
+      // predicate that works: '_closeRequested' is false at birth, so both a
+      // typeof check and a truthiness check would report it as missing.
+      // '_windows' additionally has to be an array, because the sibling
+      // WorkspaceLayout class has a Map of the same name (workspace.js:424)
+      // and _shouldDestroy() indexes into it. This changes no behavior.
+      if (!extensionThis._previewFieldsWarned) {
+        extensionThis._previewFieldsWarned = true;
+
+        [
+          ['WindowPreview', this, '_windowActor'],
+          ['WindowPreview', this, '_icon'],
+          ['WindowPreview', this, '_closeRequested'],
+          ['Workspace', params[1], '_windows'],
+        ].forEach(([className, obj, name]) => {
+          if (obj && !(name in obj)) {
+            console.warn(`[burn-my-windows@local] expected ${className} instances ` +
+              `to have ${name}, got ${typeof obj[name]}. Effects may not work on ` +
+              `this GNOME version.`);
+          }
+        });
+
+        if (params[1] && !Array.isArray(params[1]._windows)) {
+          console.warn(`[burn-my-windows@local] expected Workspace._windows to be ` +
+            `an array, got ${typeof params[1]._windows}. Effects may not work on ` +
+            `this GNOME version.`);
+        }
+      }
     };
 
     // The _deleteAll is called when the user clicks the X in the overview. We should
