@@ -589,10 +589,14 @@ export default class BurnMyWindows extends Extension {
 
     const queue = [];
     (this._profiles || []).forEach(p => {
-      this._ALL_EFFECTS.forEach(e => {
+      // The enabled effects are already cached per profile by _loadProfiles(),
+      // so the 26 enable-effect keys do not have to be read a second time here.
+      // The cache is a filtered copy of _ALL_EFFECTS, which keeps the queue
+      // order exactly as it was: profiles by descending priority, effects in
+      // _ALL_EFFECTS construction order.
+      (p.enabledEffects || []).forEach(e => {
         const nick = e.constructor.getNick();
-        if (!this._warmedNicks.has(nick) &&
-            p.settings.get_boolean(`${nick}-enable-effect`)) {
+        if (!this._warmedNicks.has(nick)) {
           this._warmedNicks.add(nick);
           queue.push(e);
         }
