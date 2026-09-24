@@ -62,12 +62,15 @@ Open **GNOME Settings → Extensions → Burn My Windows → Settings**. Pick an
 
 ## Changes vs upstream (v48)
 
-This fork adds 20 commits on top of the upstream v48 baseline (`16ab10a`):
+This fork adds 34 commits on top of the upstream v48 baseline (`16ab10a`):
 
 - **Crash fixes:** stale pointer in Incinerate/Pixel Wipe, `actor.height` clamp in Doom, null-pipeline guards in texture-binding callbacks, null `meta_window` guard, partial-enable rollback when `_doEnable()` throws, overview-clone cleanup scoped to the owning clone.
-- **Resource leaks:** signal handlers in Aura Glow/Fire now respect the `_isConnected` guard; preferences teardown disconnects the exact connected window; `changed::active-profile` is disconnected on disable; idempotent `realize`.
-- **Performance / startup:** synchronous enable with a deferred retry as fallback; deferred-enable delay reduced from 4000 ms to 1000 ms; enabled effects cached per profile instead of per animation; effect presets built once per widget realize; idle shader pre-warm; cached UPower proxy.
-- **Power handling:** tolerate UPower being unavailable instead of throwing; a constrained power profile no longer matches when the daemon is absent.
+- **Stability:** the end-of-animation handler no longer touches a window actor that has already been destroyed, which used to log three `has been already disposed` criticals per occurrence.
+- **Resource leaks:** signal handlers in Aura Glow/Fire now respect the `_isConnected` guard; preferences teardown disconnects the exact connected window; `changed::active-profile` and the desktop interface settings are released on disable; idempotent `realize`.
+- **Performance / startup:** synchronous enable with a deferred retry as fallback; deferred-enable delay reduced from 4000 ms to 1000 ms; enabled effects *and* the profile match constraints cached per profile instead of being re-read on every animation; `common.glsl` decoded once per shell process instead of once per shader; shader pre-warm reuses the cached effect list instead of reading the same 26 keys a second time; effect presets built once per widget realize; idle shader pre-warm; cached UPower and PowerProfiles proxies.
+- **Power handling:** tolerate UPower being unavailable instead of throwing; a constrained power profile no longer matches when the daemon is absent — the proxy is now rejected when nobody owns the bus name, which is what makes that rule actually hold.
+- **GNOME 50 compatibility:** the private-API sentinel now also covers the symbols that are only used at runtime (`_mapWindowDone`, `_destroyWindowDone`, `_lookupIndex`, the `overlayEnabled`/`window_container` accessors, and the `WindowPreview`/`Workspace` instance fields), using the only predicates that do not raise false warnings on a working shell; comments corrected where they no longer described GNOME 50 (`Meta.disable_unredirect_for_display` no longer exists, the effects are not built lazily, and the pre-warm does not compile GLSL — verified, `get_pipeline()` is still `null` afterwards).
+- **Preferences:** colour buttons are set through `set_rgba()` instead of the deprecated `rgba` property, which removes the warning that was logged for all 29 of them on every dialog open.
 - **Migration:** async migration callback guarded against post-disable execution; profiles are no longer duplicated on a retried migration.
 - **Build:** restored 74 shader/UI/asset sources from the compiled bundle and added a `Makefile`.
 - **Cleanup:** removed dead code (`getUIDir()`, `Shader._time`, commented `mushroom-8bit-enable` key).

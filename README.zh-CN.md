@@ -62,12 +62,15 @@ rm -rf ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 
 ## 相对上游的改动（v48）
 
-本分支在上游 v48 基线（`16ab10a`）之上新增 20 个提交：
+本分支在上游 v48 基线（`16ab10a`）之上新增 34 个提交：
 
 - **崩溃修复：** Incinerate/Pixel Wipe 的失效指针、Doom 的 `actor.height` 钳制、纹理绑定回调的空管线守卫、空 `meta_window` 守卫、`_doEnable()` 抛异常时回滚部分启用状态、概览克隆清理仅限所属克隆。
-- **资源泄漏：** Aura Glow/Fire 的信号处理器现遵循 `_isConnected` 守卫；偏好设置销毁时断开与确切窗口的连接；禁用时断开 `changed::active-profile`；`realize` 幂等化。
-- **性能 / 启动：** 同步启用并以延迟重试兜底；延迟启用时长由 4000ms 降至 1000ms；启用特效按配置档缓存（而非每次动画）；特效预设每个 widget realize 只构建一次；空闲着色器预热；缓存 UPower 代理。
-- **电源处理：** UPower 不可用时容忍而非抛异常；守护进程缺失时受限电源配置档不再匹配。
+- **稳定性：** 动画结束处理器不再触碰已被销毁的窗口 actor——此前每次命中都会打出 3 条 `has been already disposed` critical。
+- **资源泄漏：** Aura Glow/Fire 的信号处理器现遵循 `_isConnected` 守卫；偏好设置销毁时断开与确切窗口的连接；禁用时释放 `changed::active-profile` 与桌面 interface 设置对象；`realize` 幂等化。
+- **性能 / 启动：** 同步启用并以延迟重试兜底；延迟启用时长由 4000ms 降至 1000ms；启用特效**与配置档匹配约束**均按配置档缓存（而非每次动画重读）；`common.glsl` 每个 shell 进程只解码一次（而非每个着色器一次）；着色器预热复用已缓存的启用列表，不再把同样 26 个键读第二遍；特效预设每个 widget realize 只构建一次；空闲着色器预热；缓存 UPower 与 PowerProfiles 代理。
+- **电源处理：** UPower 不可用时容忍而非抛异常；守护进程缺失时受限电源配置档不再匹配——现在会在无人认领总线名时拒绝该代理，这条规则才真正成立。
+- **GNOME 50 兼容性：** 私有 API 哨兵现已覆盖仅在运行期使用的符号（`_mapWindowDone`、`_destroyWindowDone`、`_lookupIndex`、`overlayEnabled`/`window_container` 访问器，以及 `WindowPreview`/`Workspace` 的实例字段），且采用的谓词不会在正常 shell 上误报；纠正了若干已不再符合 GNOME 50 的注释（`Meta.disable_unredirect_for_display` 已不存在、特效并非延迟构造、预热**不**编译 GLSL——已验证，构造后 `get_pipeline()` 仍为 `null`）。
+- **偏好设置：** 颜色按钮改用 `set_rgba()` 而非已弃用的 `rgba` 属性，消除了每次打开对话框时为全部 29 个颜色按钮各打印一条的弃用告警。
 - **迁移：** 异步迁移回调增加禁用后守卫；重试迁移时不再重复生成配置档。
 - **构建：** 从编译后的资源包中恢复 74 个着色器/UI/资源源文件，并新增 `Makefile`。
 - **清理：** 移除死代码（`getUIDir()`、`Shader._time`、注释掉的 `mushroom-8bit-enable` 键）。
