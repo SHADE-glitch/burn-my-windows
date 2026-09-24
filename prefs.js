@@ -662,7 +662,11 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
       const settingSignalHandler = () => {
         const rgba = new Gdk.RGBA();
         rgba.parse(this.getProfileSettings().get_string(settingsKey));
-        button.rgba = rgba;
+        // Not "button.rgba = rgba": GJS warns on access to a deprecated GObject
+        // property, but not on calling a deprecated method. Assigning the
+        // property prints "The GObject property Gtk.ColorButton.rgba is
+        // deprecated." once per color button every time the prefs dialog opens.
+        button.set_rgba(rgba);
       };
 
       this._connectProfileSetting('changed::' + settingsKey, settingSignalHandler);
