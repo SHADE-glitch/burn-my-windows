@@ -738,12 +738,13 @@ export default class BurnMyWindows extends Extension {
 
       try {
         // Creating the shader registers its GType and loads and concatenates
-        // its GLSL source (~127 us per effect, measured). Whether Cogl also
-        // compiles the GL program at this point is unconfirmed:
-        // Shell.GLSLEffect only receives the source via add_glsl_snippet() in
-        // vfunc_build_pipeline(), so the program may well be linked lazily on
-        // the first draw. Returning the shader to the factory makes it
-        // immediately reusable for real animations either way.
+        // its GLSL source. Measured in a real GNOME 50 shell: 1110 us for an
+        // effect which has not been warmed yet versus 6 us when the shader
+        // comes back out of the pool, so this pre-warm is worth keeping. It
+        // does NOT compile the GL program though - get_pipeline() still
+        // returns null afterwards, so Cogl links lazily on the first draw.
+        // Returning the shader to the factory makes it immediately reusable
+        // for real animations either way.
         effect.shaderFactory.getShader().returnToFactory();
       } catch (_e) {
         // A single effect failing to compile must not break the rest.
