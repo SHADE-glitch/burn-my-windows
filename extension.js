@@ -1012,6 +1012,19 @@ export default class BurnMyWindows extends Extension {
     const shader = effect.shaderFactory.getShader();
     actor.add_effect_with_name('burn-my-windows-effect', shader);
 
+    // The window actor can be destroyed before its animation ends, for instance
+    // when mutter reaps a closing window early or when the animation is killed
+    // after the actor is already gone. GJS then prints "Object
+    // MetaWindowActorWayland ... has been already disposed" once for every
+    // property or method we touch, so track the destruction and skip the actor
+    // cleanup below. Note that a plain JavaScript expando (like
+    // _bmwOverviewClone) can still be read from a disposed actor without a
+    // warning - only GObject property and method access has to be avoided.
+    let actorDestroyed = false;
+    const destroyID = actor.connect('destroy', () => {
+      actorDestroyed = true;
+    });
+
     // At the end of the animation, we restore the scale of the overview clone (if any)
     // and call the methods which would have been called by the original ease() calls at
     // the end of the standard fade-in animation.
@@ -1024,16 +1037,25 @@ export default class BurnMyWindows extends Extension {
         actor._bmwOverviewCloneContainer.scale_y = 1.0;
       }
 
-      // Restore the original scale of the window actor.
-      actor.scale_x = 1.0;
-      actor.scale_y = 1.0;
+      if (!actorDestroyed) {
+        actor.disconnect(destroyID);
 
-      // Remove the shader and mark it being re-usable for future animations.
-      actor.remove_effect(shader);
+        // Restore the original scale of the window actor.
+        actor.scale_x = 1.0;
+        actor.scale_y = 1.0;
+
+        // Remove the shader and mark it being re-usable for future animations.
+        actor.remove_effect(shader);
+      }
+
+      // The shader is a separate object and has to go back to its pool in any
+      // case, else the pool would slowly run dry.
       shader.returnToFactory();
 
       // Finally, once the animation is done or interrupted, we call the methods which
-      // should have been called by the original ease() methods.
+      // should have been called by the original ease() methods. These are safe to call
+      // with a disposed actor: both start by deleting the actor from a Map, which only
+      // uses the wrapper identity and does not touch the GObject.
       // https://gitlab.gnome.org/GNOME/gnome-shell/-/blob/main/js/ui/windowManager.js#L1487
       // https://gitlab.gnome.org/GNOME/gnome-shell/-/blob/main/js/ui/windowManager.js#L1558.
       if (forOpening) {
