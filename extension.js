@@ -204,12 +204,51 @@ export default class BurnMyWindows extends Extension {
       [WindowPreview.prototype, '_deleteAll'],
       [WindowPreview.prototype, '_restack'],
       [WindowPreview.prototype, '_init'],
+      [Main.wm, '_mapWindowDone'],
+      [Main.wm, '_destroyWindowDone'],
+      [Workspace.prototype, '_lookupIndex'],
     ].forEach(([obj, name]) => {
       if (typeof obj[name] !== 'function') {
         console.warn(`[burn-my-windows@local] expected ${name} to be a function, ` +
           `got ${typeof obj[name]}. Effects may not work on this GNOME version.`);
       }
     });
+
+    // Two more symbols we depend on are not plain functions, so the test above
+    // would report them as missing on a perfectly working shell.
+    // 'overlayEnabled' is a getter/setter pair defined on
+    // WindowPreview.prototype: reading it with typeof invokes the getter and
+    // yields 'undefined'. 'window_container' is a GObject property whose
+    // descriptor lives on Shell.WindowPreview.prototype, not on the prototype
+    // we hold here, so an own-property lookup would not find it either.
+    // Walking the chain with getOwnPropertyDescriptor() finds both and never
+    // invokes a getter, so this cannot throw.
+    const findDescriptor = (obj, name) => {
+      for (let o = obj; o !== null; o = Object.getPrototypeOf(o)) {
+        const descriptor = Object.getOwnPropertyDescriptor(o, name);
+        if (descriptor) {
+          return descriptor;
+        }
+      }
+      return null;
+    };
+
+    [
+      // We only ever write overlayEnabled, and its setter is what hides the
+      // window overlay, so both halves have to be there.
+      [WindowPreview.prototype, 'overlayEnabled', true, true],
+      [WindowPreview.prototype, 'window_container', true, false],
+    ].forEach(([obj, name, needGet, needSet]) => {
+      const descriptor = findDescriptor(obj, name);
+      if (!descriptor || (needGet && typeof descriptor.get !== 'function') ||
+          (needSet && typeof descriptor.set !== 'function')) {
+        const got = descriptor ?
+          `get:${typeof descriptor.get} set:${typeof descriptor.set}` : 'nothing';
+        console.warn(`[burn-my-windows@local] expected ${name} to be an accessor ` +
+          `property, got ${got}. Effects may not work on this GNOME version.`);
+      }
+    });
+
     this._origShouldAnimateActor    = Main.wm._shouldAnimateActor;
     this._origWaitForOverviewToHide = Main.wm._waitForOverviewToHide;
     this._origAddWindowClone        = Workspace.prototype._addWindowClone;
