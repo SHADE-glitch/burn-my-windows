@@ -120,8 +120,12 @@ export default class BurnMyWindows extends Extension {
 
   _doEnable() {
 
-    // Effects are lazily created on first _chooseEffect() call to avoid
-    // constructing 26 ShaderFactory instances during startup.
+    // _ALL_EFFECTS is created on demand by _ensureEffects(). In practice that
+    // already happens in _loadProfiles() below (or in its migration callback),
+    // so the 26 effect objects and their 26 ShaderFactory instances do exist
+    // during startup. Only the expensive parts are deferred: the shader GType
+    // registration and the loading of the GLSL sources happen in the idle ticks
+    // of _warmShaders(), not here.
     this._ALL_EFFECTS = null;
 
     // Nicks of effects whose shaders have been pre-compiled, and the pending
@@ -613,8 +617,13 @@ export default class BurnMyWindows extends Extension {
       }
 
       try {
-        // Creating the shader compiles its GLSL source; returning it to the
-        // factory makes it immediately reusable for real animations.
+        // Creating the shader registers its GType and loads and concatenates
+        // its GLSL source (~127 us per effect, measured). Whether Cogl also
+        // compiles the GL program at this point is unconfirmed:
+        // Shell.GLSLEffect only receives the source via add_glsl_snippet() in
+        // vfunc_build_pipeline(), so the program may well be linked lazily on
+        // the first draw. Returning the shader to the factory makes it
+        // immediately reusable for real animations either way.
         effect.shaderFactory.getShader().returnToFactory();
       } catch (_e) {
         // A single effect failing to compile must not break the rest.

@@ -115,8 +115,13 @@ export var Shader = GObject.registerClass({
     this._timeline.set_duration(duration);
     this._timeline.start();
 
-    // Make sure that no fullscreen window is drawn over our animations. Since GNOME 48
-    // this is a "global" method.
+    // Make sure that no fullscreen window is drawn over our animations. On
+    // GNOME 50, Meta.disable_unredirect_for_display() does not exist, so the
+    // else-branch below is what actually runs - and it is what gnome-shell
+    // itself uses (main.js and overview.js call
+    // global.compositor.disable_unredirect()). The if-branch is unreachable
+    // dead code on this target and is kept only to avoid touching working
+    // logic.
     if (Meta.disable_unredirect_for_display) {
       Meta.disable_unredirect_for_display(global.display);
     } else {
@@ -168,8 +173,12 @@ export var Shader = GObject.registerClass({
       return;
     }
 
-    // Restore unredirecting behavior for fullscreen windows. Since GNOME 48 this is a
-    // "global" method.
+    // Restore unredirecting behavior for fullscreen windows. On GNOME 50,
+    // Meta.enable_unredirect_for_display() does not exist, so the else-branch
+    // below is what actually runs. Note that the feature test checks the
+    // *disable* symbol to decide whether to call the *enable* one; both Meta
+    // functions were added and removed together, so the two sites always take
+    // the same branch.
     if (Meta.disable_unredirect_for_display) {
       Meta.enable_unredirect_for_display(global.display);
     } else {
