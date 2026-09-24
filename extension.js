@@ -632,12 +632,15 @@ export default class BurnMyWindows extends Extension {
         this._profileSignalIds.push({settings: p.settings, signalId});
       });
 
-      // Cache the enabled effects so window animations do not have to read
-      // two dozen settings keys on every open/close. The generic handler
-      // keeps the cache fresh whenever any key of the profile changes.
-      p.enabledEffects = this._buildEnabledEffects(p);
+      // Cache the enabled effects and the match constraints so window
+      // animations do not have to read two dozen settings keys on every
+      // open/close. The generic handler keeps both caches fresh whenever any
+      // key of the profile changes.
+      p.enabledEffects   = this._buildEnabledEffects(p);
+      p.matchConstraints = this._buildMatchConstraints(p);
       const enabledSignalId = p.settings.connect('changed', () => {
-        p.enabledEffects = this._buildEnabledEffects(p);
+        p.enabledEffects   = this._buildEnabledEffects(p);
+        p.matchConstraints = this._buildMatchConstraints(p);
       });
       this._profileSignalIds.push({settings: p.settings, signalId: enabledSignalId});
     });
@@ -659,6 +662,30 @@ export default class BurnMyWindows extends Extension {
     return this._ALL_EFFECTS.filter(e => {
       return p.settings.get_boolean(`${e.constructor.getNick()}-enable-effect`);
     });
+  }
+
+  // Returns the match constraints of the given profile in the plain form used by
+  // _chooseEffect(). The result is cached per profile (see _loadProfiles)
+  // instead of being re-read on every window animation. Everything which depends
+  // on the animated window or on the current system state is deliberately not
+  // part of this: the wm class, the color scheme, the power mode and the power
+  // profile are all still sampled per animation.
+  _buildMatchConstraints(p) {
+    const app = p.settings.get_string('profile-app');
+
+    return {
+      app: app,
+      // Split app names at |, remove any whitespace, and transform to lower
+      // case. null means "this profile has no application constraint", which is
+      // exactly when app is ''. Note that app itself is not trimmed before that
+      // test, so a whitespace-only value still yields [''] as it did before.
+      apps:          app === '' ? null : app.split('|').map(i => i.trim().toLowerCase()),
+      animationType: p.settings.get_int('profile-animation-type'),
+      windowType:    p.settings.get_int('profile-window-type'),
+      powerMode:     p.settings.get_int('profile-power-mode'),
+      colorScheme:   p.settings.get_int('profile-color-scheme'),
+      powerProfile:  p.settings.get_int('profile-power-profile')
+    };
   }
 
   // Pre-compiles one shader per idle tick for each enabled effect which has not
@@ -858,47 +885,46 @@ export default class BurnMyWindows extends Extension {
       // Get the first profile whose constraints match the circumstances. The list is
       // sorted by priority, so we are good to take the first match.
       profile = this._profiles.find(p => {
-        const profileApp           = p.settings.get_string('profile-app');
-        const profileAnimationType = p.settings.get_int('profile-animation-type');
-        const profileWindowType    = p.settings.get_int('profile-window-type');
-        const profilePowerMode     = p.settings.get_int('profile-power-mode');
-        const profileColorScheme   = p.settings.get_int('profile-color-scheme');
-        const profilePowerProfile  = p.settings.get_int('profile-power-profile');
+        // The constraints are cached per profile, see _buildMatchConstraints().
+        // The fallback keeps the behavior identical should the cache ever be
+        // missing; it is not taken in practice.
+        const c = p.matchConstraints || this._buildMatchConstraints(p);
 
         // First we check whether the animation type, window type, and power mode are
         // matching.
         let matches =
-          (profileAnimationType == 0 || profileAnimationType == animationType) &&
-          (profileWindowType == 0 || profileWindowType == windowType) &&
-          (profilePowerMode == 0 || profilePowerMode == powerMode);
+          (c.animationType == 0 || c.animationType == animationType) &&
+          (c.windowType == 0 || c.windowType == windowType) &&
+          (c.powerMode == 0 || c.powerMode == powerMode);
 
         // If that was the case, we also check the application name.
-        if (matches && profileApp != '') {
+        if (matches && c.app != '') {
           const wmClass = actor.meta_window.get_wm_class();
 
           if (wmClass) {
             const app = wmClass.toLowerCase();
 
-            // Split app names at |, remove any whitespace, and transform to lower case.
-            const profileApps =
-              profileApp.split('|').map(item => item.trim().toLowerCase());
-            matches = profileApps.includes(app);
+            // The list was already split at |, trimmed and lowercased in
+            // _buildMatchConstraints(), so this is a plain lookup now.
+            matches = c.apps.includes(app);
           } else {
             matches = false;
           }
         }
 
-        // If the profile is still matching, we also check the color scheme.
-        if (matches && profileColorScheme != 0) {
+        // If the profile is still matching, we also check the color scheme. This
+        // deliberately stays a per-animation read: it is cheap, always fresh, and
+        // caching it would need a new signal connection on _shellSettings.
+        if (matches && c.colorScheme != 0) {
           const colorScheme = this._shellSettings.get_string('color-scheme');
-          matches &= (profileColorScheme == 1 && colorScheme == 'default') ||
-            (profileColorScheme == 2 && colorScheme == 'prefer-dark');
+          matches &= (c.colorScheme == 1 && colorScheme == 'default') ||
+            (c.colorScheme == 2 && colorScheme == 'prefer-dark');
         }
 
         // Finally, we may also have to check the power profile. If the daemon
         // is unavailable, the constraint cannot be verified, so a constrained
         // profile must not match.
-        if (matches && profilePowerProfile != 0) {
+        if (matches && c.powerProfile != 0) {
           const powerProfilesProxy = this._getPowerProfilesProxy();
 
           if (!powerProfilesProxy) {
@@ -909,12 +935,12 @@ export default class BurnMyWindows extends Extension {
             // To understand the numbers, please refer to the indices in the Gtk.StringList
             // of the profile-power-profile Adw.ComboRow in resources/ui/adw/prefs.ui.
             if (powerProfile == 'power-saver') {
-              matches &= profilePowerProfile == 1 || profilePowerProfile == 4;
+              matches &= c.powerProfile == 1 || c.powerProfile == 4;
             } else if (powerProfile == 'balanced') {
-              matches &= profilePowerProfile == 2 || profilePowerProfile == 4 ||
-                profilePowerProfile == 5;
+              matches &= c.powerProfile == 2 || c.powerProfile == 4 ||
+                c.powerProfile == 5;
             } else {
-              matches &= profilePowerProfile == 3 || profilePowerProfile == 5;
+              matches &= c.powerProfile == 3 || c.powerProfile == 5;
             }
           }
         }
