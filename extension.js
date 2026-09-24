@@ -576,6 +576,10 @@ export default class BurnMyWindows extends Extension {
     }
 
     this._settings = null;
+    // Same for the desktop interface settings, which are only used to read
+    // color-scheme from _chooseEffect(). Left alive across a disable they would
+    // keep watching dconf for nothing.
+    this._shellSettings = null;
   }
 
   // ----------------------------------------------------------------------- private stuff
