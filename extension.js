@@ -181,9 +181,10 @@ export default class BurnMyWindows extends Extension {
 
     // These D-Bus proxies are created lazily on first access to avoid blocking
     // during startup (UPower/PowerProfiles may not be ready on autologin).
-    this._upowerProxy        = null;
-    this._upowerProxyChecked = false;
-    this._powerProfilesProxy = null;
+    this._upowerProxy               = null;
+    this._upowerProxyChecked        = false;
+    this._powerProfilesProxy        = null;
+    this._powerProfilesProxyChecked = false;
 
     // We will monkey-patch these methods. Let's store the original ones.
     // Sentinel for GNOME upgrades: all patch targets below are private Shell
@@ -650,14 +651,28 @@ export default class BurnMyWindows extends Extension {
     return this._upowerProxy;
   }
 
-  // Lazily create the PowerProfiles D-Bus proxy.
+  // Lazily create the PowerProfiles D-Bus proxy. As for UPower above, both the
+  // success and the failure are cached: constructing the proxy performs a
+  // synchronous D-Bus call (~1.4 ms measured), so retrying it on every window
+  // animation would stall the compositor repeatedly while the daemon is
+  // unavailable. Note that the construction itself *succeeds* even when nobody
+  // owns the bus name, so the name owner has to be checked explicitly. Without
+  // that check we would hand out a merely owner-less proxy, whose ActiveProfile
+  // reads back as null. _chooseEffect() would then fall through to its
+  // "performance" branch and let profiles which are constrained to a power
+  // profile match, even though the constraint could not be verified at all.
   _getPowerProfilesProxy() {
-    if (!this._powerProfilesProxy) {
+    if (!this._powerProfilesProxyChecked) {
+      this._powerProfilesProxyChecked = true;
       try {
         const PowerProfilesProxy = Gio.DBusProxy.makeProxyWrapper(
           utils.getStringResource('/interfaces/net.hadess.PowerProfiles.xml'));
-        this._powerProfilesProxy = new PowerProfilesProxy(
+        const proxy = new PowerProfilesProxy(
           Gio.DBus.system, 'net.hadess.PowerProfiles', '/net/hadess/PowerProfiles');
+        // Only keep the proxy if the service actually owns its bus name.
+        if (proxy.get_name_owner() != null) {
+          this._powerProfilesProxy = proxy;
+        }
       } catch (_e) {
         // Service may be masked; leave as null.
       }
