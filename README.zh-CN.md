@@ -27,14 +27,17 @@
 
 | 依赖 | 说明 |
 |---|---|
+| 系统 | Ubuntu（已在 Ubuntu 26.04 验证） |
 | GNOME Shell | 45 – 50 |
-| 构建工具 | `glib-compile-resources`、`glib-compile-schemas`（包名 `glib2` / `libglib2.0-bin`） |
+| 构建工具 | `glib-compile-resources`、`glib-compile-schemas`、`make` |
 
 ## 安装
 
 本分支没有打包步骤，作为**本地扩展就地使用**：
 
 ```bash
+sudo apt install libglib2.0-bin make   # glib-compile-resources / glib-compile-schemas
+
 git clone https://github.com/SHADE-glitch/burn-my-windows.git ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 cd ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 make                     # 重新构建 GResource 包与 gschemas.compiled
@@ -62,7 +65,8 @@ rm -rf ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 
 ## 相对上游的改动（v48）
 
-本分支在上游 v48 基线（`16ab10a`）之上新增 34 个提交：
+本分支在上游 v48 基线（`16ab10a`）之上新增维护提交。此处刻意不写死数量——
+`git rev-list --count 16ab10a..HEAD` 才是权威，写死的数字总会漂移。
 
 - **崩溃修复：** Incinerate/Pixel Wipe 的失效指针、Doom 的 `actor.height` 钳制、纹理绑定回调的空管线守卫、空 `meta_window` 守卫、`_doEnable()` 抛异常时回滚部分启用状态、概览克隆清理仅限所属克隆。
 - **稳定性：** 动画结束处理器不再触碰已被销毁的窗口 actor——此前每次命中都会打出 3 条 `has been already disposed` critical。

@@ -27,14 +27,17 @@ It is **not** affiliated with or endorsed by the upstream author. The fork keeps
 
 | Requirement | Details |
 |---|---|
+| OS | Ubuntu (verified on Ubuntu 26.04) |
 | GNOME Shell | 45 – 50 |
-| Build tools | `glib-compile-resources`, `glib-compile-schemas` (package `glib2` / `libglib2.0-bin`) |
+| Build tools | `glib-compile-resources`, `glib-compile-schemas`, `make` |
 
 ## Installation
 
 This fork has no packaging step — it is used **in place** as a local extension:
 
 ```bash
+sudo apt install libglib2.0-bin make   # glib-compile-resources / glib-compile-schemas
+
 git clone https://github.com/SHADE-glitch/burn-my-windows.git ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 cd ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 make                     # rebuild the GResource bundle and gschemas.compiled
@@ -62,7 +65,8 @@ Open **GNOME Settings → Extensions → Burn My Windows → Settings**. Pick an
 
 ## Changes vs upstream (v48)
 
-This fork adds 34 commits on top of the upstream v48 baseline (`16ab10a`):
+This fork adds maintenance commits on top of the upstream v48 baseline (`16ab10a`).
+The count is deliberately not stated — `git rev-list --count 16ab10a..HEAD` is authoritative and a hardcoded number always drifts.
 
 - **Crash fixes:** stale pointer in Incinerate/Pixel Wipe, `actor.height` clamp in Doom, null-pipeline guards in texture-binding callbacks, null `meta_window` guard, partial-enable rollback when `_doEnable()` throws, overview-clone cleanup scoped to the owning clone.
 - **Stability:** the end-of-animation handler no longer touches a window actor that has already been destroyed, which used to log three `has been already disposed` criticals per occurrence.
