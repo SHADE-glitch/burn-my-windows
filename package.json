@@ -1,0 +1,9 @@
+{
+  "name": "burn-my-windows",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check extension.js && node --check prefs.js"
+  }
+}
