@@ -24,7 +24,7 @@ const ShaderFactory = await utils.importInShellOnly('./ShaderFactory.js');
 
 // We import Gtk for the color preview in the preferences dialog. This is only available
 // and required in the preferences process.
-const Gtk = await utils.importInPrefsOnly('gi://Gtk');
+const Gtk = await utils.importInPrefsOnly('gi://Gtk?version=4.0');
 
 const _ = await utils.importGettext();
 
