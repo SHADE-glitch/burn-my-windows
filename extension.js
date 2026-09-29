@@ -284,57 +284,59 @@ export default class BurnMyWindows extends Extension {
     // there. To enable animations in the overview, we check inside the method whether it
     // was called by either _mapWindow or _destroyWindow. If so, we return true. Let's see
     // if this breaks stuff left and right...
-    Main.wm._shouldAnimateActor = function(actor, types) {
-      const stack      = (new Error()).stack;
-      const forClosing = stack.includes('_destroyWindow@');
-      const forOpening = stack.includes('_mapWindow@');
+    if (this._origShouldAnimateActor) {
+      Main.wm._shouldAnimateActor = function(actor, types) {
+        const stack      = (new Error()).stack;
+        const forClosing = stack.includes('_destroyWindow@');
+        const forOpening = stack.includes('_mapWindow@');
 
-      // This is also called in other cases, for instance when minimizing windows. We are
-      // only interested in window opening and window closing for now.
-      if (forClosing || forOpening) {
+        // This is also called in other cases, for instance when minimizing windows. We are
+        // only interested in window opening and window closing for now.
+        if (forClosing || forOpening) {
 
-        // If there is an applicable effect profile, we intercept the ease() method to
-        // setup our own effect.
-        const chosenEffect = extensionThis._chooseEffect(actor, forOpening);
+          // If there is an applicable effect profile, we intercept the ease() method to
+          // setup our own effect.
+          const chosenEffect = extensionThis._chooseEffect(actor, forOpening);
 
-        if (chosenEffect) {
-          // Store the original ease() method of the actor.
-          const orig = actor.ease;
+          if (chosenEffect) {
+            // Store the original ease() method of the actor.
+            const orig = actor.ease;
 
-          // Now intercept the next call to actor.ease().
-          actor.ease = function(...params) {
-            // There is a really weird issue in GNOME Shell 44: A few non-GTK windows are
-            // resized directly after they are mapped on X11. This happens for instance
-            // for keepassxc after it was closed in the maximized state. As the
-            // _mapWindow() method is called asynchronously, the window is not yet visible
-            // when the resize happens. Hence, our ease-override is called for the resize
-            // animation instead of the window-open or window-close animation. This is not
-            // what we want. So we check again whether the ease() call is for the
-            // window-open or window-close animation. If not, we just call the original
-            // ease() method. See also:
-            // https://github.com/Schneegans/Burn-My-Windows/issues/335
-            const stack      = (new Error()).stack;
-            const forClosing = stack.includes('_destroyWindow@');
-            const forOpening = stack.includes('_mapWindow@');
+            // Now intercept the next call to actor.ease().
+            actor.ease = function(...params) {
+              // There is a really weird issue in GNOME Shell 44: A few non-GTK windows are
+              // resized directly after they are mapped on X11. This happens for instance
+              // for keepassxc after it was closed in the maximized state. As the
+              // _mapWindow() method is called asynchronously, the window is not yet visible
+              // when the resize happens. Hence, our ease-override is called for the resize
+              // animation instead of the window-open or window-close animation. This is not
+              // what we want. So we check again whether the ease() call is for the
+              // window-open or window-close animation. If not, we just call the original
+              // ease() method. See also:
+              // https://github.com/Schneegans/Burn-My-Windows/issues/335
+              const stack      = (new Error()).stack;
+              const forClosing = stack.includes('_destroyWindow@');
+              const forOpening = stack.includes('_mapWindow@');
 
-            if (forClosing || forOpening) {
-              // Quickly restore the original behavior. Nobody noticed, I guess :D
-              actor.ease = orig;
+              if (forClosing || forOpening) {
+                // Quickly restore the original behavior. Nobody noticed, I guess :D
+                actor.ease = orig;
 
-              // And then create the effect!
-              extensionThis._setupEffect(actor, forOpening, chosenEffect.effect,
-                                         chosenEffect.profile);
-            } else {
-              orig.apply(this, params);
-            }
-          };
+                // And then create the effect!
+                extensionThis._setupEffect(actor, forOpening, chosenEffect.effect,
+                                           chosenEffect.profile);
+              } else {
+                orig.apply(this, params);
+              }
+            };
 
-          return true;
+            return true;
+          }
         }
-      }
 
-      return extensionThis._origShouldAnimateActor.apply(this, [actor, types]);
-    };
+        return extensionThis._origShouldAnimateActor.apply(this, [actor, types]);
+      };
+    }
 
     // Make sure to remove any effects if requested by the window manager.
     this._killEffectsSignal =
@@ -352,35 +354,48 @@ export default class BurnMyWindows extends Extension {
     // canvas to draw the effects. Outside the overview we can simply increase the scale
     // of the actor. However, if we are in the overview, we have to enlarge the clone of
     // the window as well.
-    Workspace.prototype._addWindowClone = function(...params) {
-      const clone      = extensionThis._origAddWindowClone.apply(this, params);
-      const container  = clone.window_container;
-      const realWindow = params[0].get_compositor_private();
+    // Guarded on the install side for the same reason as
+    // Main.wm._waitForOverviewToHide below: an unguarded install would create a stub
+    // that the guarded restore could never take back, because this._origAddWindowClone
+    // would be undefined. Every remaining prototype install below is guarded the same
+    // way; see test/patch-symmetry.test.mjs and AGENTS.md.
+    if (this._origAddWindowClone) {
+      Workspace.prototype._addWindowClone = function(...params) {
+        const clone      = extensionThis._origAddWindowClone.apply(this, params);
+        const container  = clone.window_container;
+        const realWindow = params[0].get_compositor_private();
 
-      // Store the overview clone as temporary members of the real window actor. When we
-      // set up the effect, we will check for the existence of these and enlarge the clone
-      // as needed.
-      realWindow._bmwOverviewClone          = clone;
-      realWindow._bmwOverviewCloneContainer = container;
+        // Store the overview clone as temporary members of the real window actor. When we
+        // set up the effect, we will check for the existence of these and enlarge the clone
+        // as needed.
+        realWindow._bmwOverviewClone          = clone;
+        realWindow._bmwOverviewCloneContainer = container;
 
-      // Remove the temporary members again once the clone is deleted. Only
-      // clear them if they still point at this clone: a newer overview open
-      // may have replaced them while this container died late.
-      container.connect('destroy', () => {
-        if (realWindow._bmwOverviewClone === clone) {
-          delete realWindow._bmwOverviewClone;
-          delete realWindow._bmwOverviewCloneContainer;
-        }
-      });
+        // Remove the temporary members again once the clone is deleted. Only
+        // clear them if they still point at this clone: a newer overview open
+        // may have replaced them while this container died late.
+        container.connect('destroy', () => {
+          if (realWindow._bmwOverviewClone === clone) {
+            delete realWindow._bmwOverviewClone;
+            delete realWindow._bmwOverviewCloneContainer;
+          }
+        });
 
-      return clone;
-    };
+        return clone;
+      };
+    }
 
     // Usually, windows are faded in after the overview is completely hidden. We enable
     // window-open animations by not waiting for this.
-    Main.wm._waitForOverviewToHide = async function() {
-      return Promise.resolve();
-    };
+    // Guarded on the install side to mirror the guarded restore in disable(): were a
+    // future shell version to drop the method, patching it anyway would leave a stub that
+    // disable() could never take back, because this._origWaitForOverviewToHide would be
+    // undefined and the restore would be skipped.
+    if (this._origWaitForOverviewToHide) {
+      Main.wm._waitForOverviewToHide = async function() {
+        return Promise.resolve();
+      };
+    }
 
     // These three method overrides are mega-hacky! Usually, windows are not faded when
     // closed from the overview (why?). With these overrides we make sure that they are
@@ -388,18 +403,22 @@ export default class BurnMyWindows extends Extension {
     // whether there is a transition ongoing (via extensionThis._shouldDestroy). If that's
     // the case, these methods do nothing.
     // https://gitlab.gnome.org/GNOME/gnome-shell/-/blob/main/js/ui/workspace.js#L1258
-    Workspace.prototype._windowRemoved = function(ws, metaWin) {
-      if (extensionThis._shouldDestroy(this, metaWin)) {
-        extensionThis._origWindowRemoved.apply(this, [ws, metaWin]);
-      }
-    };
+    if (this._origWindowRemoved) {
+      Workspace.prototype._windowRemoved = function(ws, metaWin) {
+        if (extensionThis._shouldDestroy(this, metaWin)) {
+          extensionThis._origWindowRemoved.apply(this, [ws, metaWin]);
+        }
+      };
+    }
 
     // https://gitlab.gnome.org/GNOME/gnome-shell/-/blob/main/js/ui/workspace.js#L1137
-    Workspace.prototype._doRemoveWindow = function(metaWin) {
-      if (extensionThis._shouldDestroy(this, metaWin)) {
-        extensionThis._origDoRemoveWindow.apply(this, [metaWin]);
-      }
-    };
+    if (this._origDoRemoveWindow) {
+      Workspace.prototype._doRemoveWindow = function(metaWin) {
+        if (extensionThis._shouldDestroy(this, metaWin)) {
+          extensionThis._origDoRemoveWindow.apply(this, [metaWin]);
+        }
+      };
+    }
 
     // With the code below, we hide the window-overlay (icon, label, close button) in the
     // overview once the close-animation is running.
@@ -411,80 +430,86 @@ export default class BurnMyWindows extends Extension {
 
     // Whenever a WindowPreview is created, we connect to the referenced Meta.Window's
     // 'unmanaged' signal to hide the overlay.
-    WindowPreview.prototype._init = function(...params) {
-      extensionThis._origInit.apply(this, params);
+    if (this._origInit) {
+      WindowPreview.prototype._init = function(...params) {
+        extensionThis._origInit.apply(this, params);
 
-      // Hide the window's icon, name, and close button.
-      const connectionID = this.metaWindow.connect('unmanaged', () => {
-        if (this.window_container) {
-          this.overlayEnabled = false;
-          this._icon.visible  = false;
-        }
-      });
-
-      // Make sure to not call the callback above if the Meta.Window was not unmanaged
-      // before leaving the overview.
-      this.connect('destroy', () => {
-        this.metaWindow.disconnect(connectionID);
-      });
-
-      // Sentinel for the private instance fields we rely on. '_windowActor',
-      // '_icon' and '_closeRequested' are plain assignments in the original
-      // _init() above (windowPreview.js:48/:136/:130) and '_windows' in
-      // Workspace._init() (workspace.js:1090), so none of them exist on any
-      // prototype and none of them can be checked statically at enable time.
-      // The workspace is the second _init() argument (workspace.js:1337).
-      // 'window_container' is deliberately not repeated here: it is a GObject
-      // property and is already covered by the accessor check in _doEnable().
-      // Only 'in', typeof and Array.isArray are used below - none of them can
-      // throw or invoke a getter, which matters because this runs inside the
-      // most safety-critical patch in this file. Note that 'in' is the only
-      // predicate that works: '_closeRequested' is false at birth, so both a
-      // typeof check and a truthiness check would report it as missing.
-      // '_windows' additionally has to be an array, because the sibling
-      // WorkspaceLayout class has a Map of the same name (workspace.js:424)
-      // and _shouldDestroy() indexes into it. This changes no behavior.
-      if (!extensionThis._previewFieldsWarned) {
-        extensionThis._previewFieldsWarned = true;
-
-        [
-          ['WindowPreview', this, '_windowActor'],
-          ['WindowPreview', this, '_icon'],
-          ['WindowPreview', this, '_closeRequested'],
-          ['Workspace', params[1], '_windows'],
-        ].forEach(([className, obj, name]) => {
-          if (obj && !(name in obj)) {
-            console.warn(`[burn-my-windows@local] expected ${className} instances ` +
-              `to have ${name}, got ${typeof obj[name]}. Effects may not work on ` +
-              `this GNOME version.`);
+        // Hide the window's icon, name, and close button.
+        const connectionID = this.metaWindow.connect('unmanaged', () => {
+          if (this.window_container) {
+            this.overlayEnabled = false;
+            this._icon.visible  = false;
           }
         });
 
-        if (params[1] && !Array.isArray(params[1]._windows)) {
-          console.warn(`[burn-my-windows@local] expected Workspace._windows to be ` +
-            `an array, got ${typeof params[1]._windows}. Effects may not work on ` +
-            `this GNOME version.`);
+        // Make sure to not call the callback above if the Meta.Window was not unmanaged
+        // before leaving the overview.
+        this.connect('destroy', () => {
+          this.metaWindow.disconnect(connectionID);
+        });
+
+        // Sentinel for the private instance fields we rely on. '_windowActor',
+        // '_icon' and '_closeRequested' are plain assignments in the original
+        // _init() above (windowPreview.js:48/:136/:130) and '_windows' in
+        // Workspace._init() (workspace.js:1090), so none of them exist on any
+        // prototype and none of them can be checked statically at enable time.
+        // The workspace is the second _init() argument (workspace.js:1337).
+        // 'window_container' is deliberately not repeated here: it is a GObject
+        // property and is already covered by the accessor check in _doEnable().
+        // Only 'in', typeof and Array.isArray are used below - none of them can
+        // throw or invoke a getter, which matters because this runs inside the
+        // most safety-critical patch in this file. Note that 'in' is the only
+        // predicate that works: '_closeRequested' is false at birth, so both a
+        // typeof check and a truthiness check would report it as missing.
+        // '_windows' additionally has to be an array, because the sibling
+        // WorkspaceLayout class has a Map of the same name (workspace.js:424)
+        // and _shouldDestroy() indexes into it. This changes no behavior.
+        if (!extensionThis._previewFieldsWarned) {
+          extensionThis._previewFieldsWarned = true;
+
+          [
+            ['WindowPreview', this, '_windowActor'],
+            ['WindowPreview', this, '_icon'],
+            ['WindowPreview', this, '_closeRequested'],
+            ['Workspace', params[1], '_windows'],
+          ].forEach(([className, obj, name]) => {
+            if (obj && !(name in obj)) {
+              console.warn(`[burn-my-windows@local] expected ${className} instances ` +
+                `to have ${name}, got ${typeof obj[name]}. Effects may not work on ` +
+                `this GNOME version.`);
+            }
+          });
+
+          if (params[1] && !Array.isArray(params[1]._windows)) {
+            console.warn(`[burn-my-windows@local] expected Workspace._windows to be ` +
+              `an array, got ${typeof params[1]._windows}. Effects may not work on ` +
+              `this GNOME version.`);
+          }
         }
-      }
-    };
+      };
+    }
 
     // The _deleteAll is called when the user clicks the X in the overview. We should
     // not attempt to close windows twice. Due to the animation in the overview, the
     // close button can be clicked twice which normally would lead to a crash.
-    WindowPreview.prototype._deleteAll = function() {
-      if (!this._closeRequested) {
-        extensionThis._origDeleteAll.apply(this);
-      }
-    };
+    if (this._origDeleteAll) {
+      WindowPreview.prototype._deleteAll = function() {
+        if (!this._closeRequested) {
+          extensionThis._origDeleteAll.apply(this);
+        }
+      };
+    }
 
     // This is required, else WindowPreview's _restack() which is called by the
     // "this.overlayEnabled = false", sometimes tries to access an already delete
     // WindowPreview.
-    WindowPreview.prototype._restack = function() {
-      if (!this._closeRequested) {
-        extensionThis._origRestack.apply(this);
-      }
-    };
+    if (this._origRestack) {
+      WindowPreview.prototype._restack = function() {
+        if (!this._closeRequested) {
+          extensionThis._origRestack.apply(this);
+        }
+      };
+    }
   }
 
   // This function could be called after the extension is uninstalled, disabled in GNOME
