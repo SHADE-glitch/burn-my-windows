@@ -57,6 +57,27 @@ rm -rf ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 
 打开 **GNOME 设置 → 扩展 → Burn My Windows → 设置**。在预览列表中选择特效，再调整其参数。可创建配置档，将特效限定到特定应用、窗口类型或电源状态。
 
+## 测试
+
+三层，必须按顺序跑。完整手册——每层能证明什么、不能证明什么，私有 API 清单、兼容分支矩阵、
+回滚配方——都在 [MAINTENANCE.md](MAINTENANCE.md)。
+
+```bash
+npm run check && npm test          # L0 静态：秒级，不需要显示器
+./test/headless/run.sh all         # L1 headless：真 GNOME Shell，沙箱内，分钟级
+./test/headless/run.sh 01          # GNOME 大版本升级后，从这里开始
+```
+
+| 层 | 能证明 | 不能证明 |
+|---|---|---|
+| **L0** 静态门 | 编译产物是否陈旧、26 个特效在 8 个登记点是否齐全、哨兵与补丁的簿记、合成栈帧下的接管分支 | 任何运行期行为 |
+| **L1** headless 探针 | 18 个私有 API 在**当前** GNOME 上是否实存、每条兼容分支实际走哪条、着色器与 uniform 解析、真窗口逐个特效播放、disable 无残留 | 流畅度、GPU 成本、特效好不好看 |
+| **L2** 真实会话 | 人能看见的一切（需先注销重登） | 无可自动化 |
+
+L1 完全隔离：私有 D-Bus socket、`GSETTINGS_BACKEND=memory`、独立的
+`XDG_CONFIG_HOME` / `XDG_DATA_HOME` / `XDG_RUNTIME_DIR`；并且只要 `~/.config/dconf/user`、
+profile 目录与工作树与开跑前不是逐字节一致，它就拒绝报绿。
+
 ## 偏好设置
 
 - **全局：** 当前配置档、预览特效、测试模式。

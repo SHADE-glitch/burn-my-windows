@@ -57,6 +57,29 @@ rm -rf ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 
 Open **GNOME Settings → Extensions → Burn My Windows → Settings**. Pick an effect from the preview list, then tune its parameters. Create profiles to scope effects to specific applications, window types or power states.
 
+## Testing
+
+Three layers, always run in order. The full playbook — what each layer can and cannot
+prove, the private-API inventory, the compatibility matrix and the rollback recipe — is
+in [MAINTENANCE.md](MAINTENANCE.md).
+
+```bash
+npm run check && npm test          # L0: static, seconds, no display needed
+./test/headless/run.sh all         # L1: real GNOME Shell in a sandbox, minutes
+./test/headless/run.sh 01          # after a GNOME bump: start here
+```
+
+| Layer | Proves | Cannot prove |
+|---|---|---|
+| **L0** static gates | stale compiled artifacts, the 26 effects registered in all 8 places, sentinel/patch bookkeeping, the take-over branch on a synthetic stack | any runtime behaviour |
+| **L1** headless probes | the 18 private APIs still exist on *this* GNOME, which compatibility branch is taken, shader/uniform resolution, real windows animating each effect, leak-free disable | smoothness, GPU cost, whether an effect looks right |
+| **L2** real session | everything a human can see — after log out / log in | nothing, but it is not automatable |
+
+L1 is fully isolated: a private D-Bus socket, `GSETTINGS_BACKEND=memory`, scratch
+`XDG_CONFIG_HOME` / `XDG_DATA_HOME` / `XDG_RUNTIME_DIR`, and it refuses to report green
+unless `~/.config/dconf/user`, the profile directory and the working tree are
+byte-identical to before the run.
+
 ## Preferences
 
 - **Global:** active profile, preview effect, test mode.

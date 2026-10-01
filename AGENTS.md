@@ -48,28 +48,53 @@ fork of Burn-My-Windows, used in place with no install step.
   newer shell internals.
 
 ## Tests
-- `npm test` runs `node --test test/*.test.mjs`. `npm run check` is a syntax-only gate
-  (`node --check extension.js && node --check prefs.js`); it parses as ESM because
-  `package.json` sets `"type": "module"`. There is deliberately **no `version` field** —
-  `metadata.json` is the single source of truth for it.
+- **Three layers, always in order.** See `MAINTENANCE.md` §1 for what each one can prove.
+  - **L0** `npm run check && npm test` — seconds, no display. `check` is `node --check`
+    over `extension.js`, `prefs.js` and all of `src/` (32 files); `test` runs
+    `test/*.test.mjs`. Four gates: build freshness, effect registration, sentinel drift,
+    patch symmetry. Run this before claiming anything about **any** change.
+  - **L1** `./test/headless/run.sh all` — real GNOME Shell process, fully sandboxed,
+    minutes. The only layer that can prove private-API existence, shader/uniform
+    resolution, the `_mapWindow@` take-over branch on a genuine SpiderMonkey stack, and
+    dispose-race behaviour.
+  - **L2** the real session, by eye. Smoothness, first-paint GLSL link cost, and whether
+    an effect *looks* right are not determinable by any script.
 - `extension.js`, `prefs.js` and `src/` are all GI-bound, so they cannot be imported
   outside GNOME Shell. `test/patch-symmetry.test.mjs` therefore slices the two patch
-  regions out of the source and runs them against mock shell objects, the way
-  `fast-translate@local/test/prefs-validator.js` does its static checks. The slices are
-  located by the stable comments around them, never by line numbers.
+  regions out of the source and runs them against mock shell objects. The slices are
+  located by the stable comments around them (they live in `test/lib/extension-slices.mjs`),
+  never by line numbers.
+- **Expected counts are hardcoded and cross-checked on purpose.** `26` effects appear in
+  `test/effect-registry.test.mjs`, `test/build-freshness.test.mjs` and probes 02/05; the
+  probe derives its expectation from the GResource bundle, not from `_ALL_EFFECTS`,
+  because comparing a list with itself proves nothing.
+- **Gates must be able to fail.** Prove it with mutations in a `cp -a` copy (never the
+  working tree): tamper a `.frag`, drop an effect from `_ALL_EFFECTS`, add a 9th
+  `this._orig…` capture without updating `PATCHES`, or un-guard one install.
 - **`disable` + `enable` does not reimport modules**, so no script can make a source edit
-  live. `scripts/reload.sh` runs `make`, cycles the extension, waits for `State: ACTIVE`,
-  tails the log, and warns when `extension.js` or `src/*.js` has uncommitted changes that
-  a re-login is still needed for. A real check requires **log out / log in**, then
-  `journalctl -f -o cat /usr/bin/gnome-shell | grep -i burn-my-windows`.
+  live *in the running desktop*. `scripts/reload.sh` runs `make`, cycles the extension,
+  waits for `State: ACTIVE`, tails the log, and warns when `extension.js` or `src/*.js`
+  has uncommitted changes that a re-login is still needed for. A real check requires
+  **log out / log in**, then
+  `journalctl -f -o cat --identifier=/usr/bin/gnome-shell | grep -F '[burn-my-windows@local]'`.
 - Do not claim a source change is verified without a re-login; a passing `npm test`
   proves the patch bookkeeping, not the animation behaviour.
-- **`_shouldAnimateActor` cannot be fully tested under Node.** It recognises the
-  window-open/close paths by looking for `_mapWindow@` / `_destroyWindow@` in
-  `(new Error()).stack`, and that `@` frame syntax is SpiderMonkey's; V8 writes
-  `at _mapWindow (...)`, so the take-over branch is inert here. The test pins the
-  assumption instead. Covering that branch for real needs the headless-shell
-  integration script, which this repo does not have yet.
+- **`_shouldAnimateActor` *is* now covered, two ways.** Under Node the branch is driven
+  by temporarily replacing `globalThis.Error` with a stack of the Gecko shape (the
+  sliced code resolves `Error` from the global scope at call time). In a real shell,
+  probe 03 defines functions actually named `_mapWindow` / `_destroyWindow`, which
+  produces genuine SpiderMonkey frames. The old "inert under Node, needs an integration
+  script this repo does not have" note was obsolete on both counts.
+- **A probe object has to satisfy the path it is testing.** A stub actor with no
+  `meta_window` makes `_chooseEffect()` bail at its first guard and the fork correctly
+  delegates to the shell's real `_shouldAnimateActor` — which dereferences
+  `actor.get_texture()` and throws. Record the saved original instead of calling through.
+- **Never `pkill -f <pattern>` in harness scripts.** The pattern is also in the invoking
+  shell's own argv, so the teardown kills its caller (silent exit 143). Kill by pidfile,
+  after verifying the pid's cmdline is still yours.
+- **Never make L1 write settings via `gsettings` from the driver.**
+  `GSETTINGS_BACKEND=memory` is per-process; probes set settings through
+  `stateObj._settings` inside the sandboxed shell.
 
 ## Docs & Commits
 - `README.md` and `README.zh-CN.md` are a **two-file bilingual pair** — edit both.
