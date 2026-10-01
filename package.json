@@ -4,6 +4,6 @@
   "type": "module",
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "check": "node --check extension.js && node --check prefs.js"
+    "check": "node --check extension.js && node --check prefs.js && find src -name '*.js' -exec node --check {} +"
   }
 }

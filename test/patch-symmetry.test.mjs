@@ -11,67 +11,25 @@
 // The slices are located by the stable comments around them, never by line numbers.
 
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import path from 'node:path';
 import test from 'node:test';
-import {fileURLToPath} from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SRC = readFileSync(path.join(ROOT, 'extension.js'), 'utf8');
-
-// The 8 methods enable() replaces. `instance: true` marks the two that are assigned
-// onto Main.wm as own properties instead of onto a prototype. That difference is
-// what originally made them look like the only ones needing an install guard, but
-// the failure mode below is identical for both kinds: a missing upstream method
-// would be re-created as a stub, and the guarded restore would then have nothing to
-// put back. So all 8 need the guard, and these tests hold them to it.
-const PATCHES = [
-  {holder: 'wm', name: '_shouldAnimateActor', instance: true},
-  {holder: 'wm', name: '_waitForOverviewToHide', instance: true},
-  {holder: 'workspace', name: '_addWindowClone', instance: false},
-  {holder: 'workspace', name: '_windowRemoved', instance: false},
-  {holder: 'workspace', name: '_doRemoveWindow', instance: false},
-  {holder: 'windowPreview', name: '_init', instance: false},
-  {holder: 'windowPreview', name: '_deleteAll', instance: false},
-  {holder: 'windowPreview', name: '_restack', instance: false},
-];
+import {SRC, PATCHES, installSource, restoreSource} from './lib/extension-slices.mjs';
 
 const PATCH_COUNT = PATCHES.length;
 
-const INSTALL_START =
-  'this._origShouldAnimateActor    = Main.wm._shouldAnimateActor;';
-const INSTALL_END =
-  '  // This function could be called after the extension is uninstalled';
-const RESTORE_START =
-  '    // Restore the original window-open and window-close animations.';
-const RESTORE_END =
-  '    // Disconnect the active-profile handler.';
+// installSource() slices from the first `this._orig... = ...` capture to the comment
+// that introduces disable(), and prepends the `const extensionThis = this` declaration
+// enable() makes, so a replay reaches its original exactly the way production does.
+const INSTALL_SRC = installSource();
+const RESTORE_SRC = restoreSource();
 
-function sliceBetween(startAnchor, endAnchor) {
-  const start = SRC.indexOf(startAnchor);
-  const end = SRC.indexOf(endAnchor);
-  assert.notEqual(start, -1, `slice start anchor not found: ${startAnchor}`);
-  assert.notEqual(end, -1, `slice end anchor not found: ${endAnchor}`);
-  assert.ok(start < end, `slice anchors are inverted: ${startAnchor}`);
-  return SRC.slice(start, end);
-}
-
-// The install region runs up to the comment that introduces disable(), so it still
-// carries enable()'s own closing brace at the end. Cutting the slice there verbatim
-// yields a SyntaxError deep inside new Function(), which says nothing about the
-// cause, so the method terminator is dropped explicitly: inside a class body every
-// method closes with exactly two spaces of indent.
-const INSTALL_REGION = sliceBetween(INSTALL_START, INSTALL_END);
-const INSTALL_TAIL = INSTALL_REGION.lastIndexOf('\n  }\n');
-assert.notEqual(INSTALL_TAIL, -1,
-  'could not find the end of enable() while slicing the install region');
-const INSTALL_BODY = INSTALL_REGION.slice(0, INSTALL_TAIL + 1);
-
-// enable() declares `const extensionThis = this` before the first patch, and every
-// replacement reaches its original through that alias, so a replay has to provide it
-// or the delegation under test would not be the production one.
-const INSTALL_SRC = 'const extensionThis = this;\n' + INSTALL_BODY;
-const RESTORE_SRC = sliceBetween(RESTORE_START, RESTORE_END);
+// The 8 methods enable() replaces are declared once, in lib/extension-slices.mjs, so
+// the sentinel drift gate and this gate cannot ever disagree about how many there are.
+// `instance: true` marks the two that are assigned onto Main.wm as own properties
+// instead of onto a prototype. That difference is what originally made them look like
+// the only ones needing an install guard, but the failure mode below is identical for
+// both kinds: a missing upstream method would be re-created as a stub, and the guarded
+// restore would then have nothing to put back.
 
 function installInto(ext, shell) {
   return new Function('Main', 'Workspace', 'WindowPreview', 'global', INSTALL_SRC)
@@ -274,18 +232,154 @@ test('every replacement runs and reaches its original without throwing', async (
 
 test('_shouldAnimateActor recognises the shell call paths by Gecko stack frames', () => {
   // The whole dispatch hinges on the frame syntax of the JS engine this runs on.
-  // Under V8 the substring never matches, so the replacements would silently stop
-  // taking the animation over. Asserting it here means a future engine change shows
-  // up as a test failure rather than as effects that quietly stop working.
+  // Asserting the probes are still in the source means a rename of either substring
+  // shows up as a test failure rather than as effects that quietly stop working.
   assert.match(SRC, /stack\.includes\('_destroyWindow@'\)/,
     "expected the _destroyWindow@ stack probe");
   assert.match(SRC, /stack\.includes\('_mapWindow@'\)/,
     "expected the _mapWindow@ stack probe");
 
-  const frame = '_mapWindow@resource:///org/gnome/shell/ui/windowManager.js:1465:22';
-  assert.ok(frame.includes('_mapWindow@'),
-    'sanity check: the Gecko frame syntax used by the code must match its probe');
-  const v8Frame = 'at _mapWindow (resource:///org/gnome/shell/ui/windowManager.js:1465:22)';
-  assert.ok(!v8Frame.includes('_mapWindow@'),
-    'sanity check: the V8 frame syntax must NOT match, which is why this path is untested here');
+  // What used to be asserted here -- that a hand-written frame string contains its own
+  // probe substring -- could not fail, so it is gone. The two cases below drive the
+  // branch instead: the sliced code resolves `Error` from the global scope at call
+  // time, so a stack of either shape can be supplied and the fork's own dispatch runs.
+});
+
+// The dispatch reads `(new Error()).stack` twice: once in _shouldAnimateActor and once
+// inside the ease() override. Installing a fake Error for the duration of a call is
+// therefore enough to drive both, which is what retires the "inert under Node" note.
+// This is mock-level evidence -- it proves the fork's branch logic, not that GNOME
+// Shell 50 emits Gecko-style frames. Tier 1's shouldAnimateActor-takeover-real-stack
+// case supplies the engine-level truth by defining a function actually named
+// _mapWindow inside a real shell process.
+function withStack(frameText, run) {
+  const Real = globalThis.Error;
+  class ShapedError {
+    constructor() {
+      this.stack = frameText;
+      this.message = '';
+    }
+  }
+  globalThis.Error = ShapedError;
+  try {
+    return run();
+  } finally {
+    globalThis.Error = Real;
+  }
+}
+
+const GECKO_OPEN = `  someFrame@file:///a.js:1:1\n  _mapWindow@resource:///org/gnome/shell/ui/windowManager.js:1465:22`;
+const GECKO_CLOSE = `  someFrame@file:///a.js:1:1\n  _destroyWindow@resource:///org/gnome/shell/ui/windowManager.js:1504:9`;
+const V8_OPEN = '  at _mapWindow (resource:///org/gnome/shell/ui/windowManager.js:1465:22)';
+
+test('the window-open path is taken over when the stack looks like SpiderMonkey', () => {
+  const shell = makeShell();
+  const chosen = [];
+  const setUps = [];
+  const ext = makeExt({
+    _chooseEffect: (actor, forOpening) => {
+      chosen.push({actor, forOpening});
+      return {effect: 'the-effect', profile: 'the-profile'};
+    },
+    _setupEffect: (actor, forOpening, effect, profile) => {
+      setUps.push({actor, forOpening, effect, profile});
+    },
+  });
+  installInto(ext, shell);
+
+  const originalEase = function ease() { return 'stock ease'; };
+  const actor = {ease: originalEase};
+
+  const taken = withStack(GECKO_OPEN, () =>
+    shell.wm._shouldAnimateActor.call(shell.wm, actor, 1));
+
+  assert.equal(chosen.length, 1, '_chooseEffect was not consulted on the open path');
+  assert.equal(chosen[0].forOpening, true, 'the open path must report forOpening = true');
+  assert.equal(taken, true,
+    'the patch must claim the animation, otherwise the shell eases the window away');
+  assert.notEqual(actor.ease, originalEase, 'actor.ease was not intercepted');
+
+  // The override is what actually creates the effect, and it re-reads the stack to
+  // reject the X11 resize-that-lands-right-after-map case (issue 335). Driving it with
+  // the same open-path frame has to restore the original ease and call _setupEffect.
+  withStack(GECKO_OPEN, () => actor.ease({duration: 500, opacity: 0}));
+
+  assert.equal(setUps.length, 1, 'the ease override never created the effect');
+  assert.equal(setUps[0].forOpening, true);
+  assert.equal(setUps[0].effect, 'the-effect', 'the chosen effect was not forwarded');
+  assert.equal(setUps[0].profile, 'the-profile', 'the chosen profile was not forwarded');
+  assert.equal(actor.ease, originalEase,
+    'the override must hand ease() back when it is done');
+});
+
+test('the window-close path is taken over too, and an unrelated caller is not', () => {
+  const shell = makeShell();
+  const chosen = [];
+  const setUps = [];
+  const ext = makeExt({
+    _chooseEffect: (actor, forOpening) => {
+      chosen.push(forOpening);
+      return {effect: 'e', profile: 'p'};
+    },
+    _setupEffect: (...args) => setUps.push(args[1]),
+  });
+  installInto(ext, shell);
+
+  const actor = {ease: function ease() {}};
+  assert.equal(withStack(GECKO_CLOSE, () =>
+    shell.wm._shouldAnimateActor.call(shell.wm, actor, 1)), true,
+    'the close path must be taken over as well');
+  assert.deepEqual(chosen, [false], 'the close path must report forOpening = false');
+
+  withStack(GECKO_CLOSE, () => actor.ease({duration: 500}));
+  assert.deepEqual(setUps, [false], 'the ease override lost the forOpening flag');
+
+  // A caller that is on neither path -- minimise, for instance -- has to reach the
+  // original untouched, and must not be intercepted at all.
+  chosen.length = 0;
+  setUps.length = 0;
+  const plain = {ease: function ease() { return 'stock'; }};
+  assert.equal(withStack('  unrelatedFrame@file:///a.js:9:9', () =>
+    shell.wm._shouldAnimateActor.call(shell.wm, plain, 1)), '_shouldAnimateActor',
+    'an unrelated caller must delegate to the original');
+  assert.equal(chosen.length, 0, '_chooseEffect ran on a path it should ignore');
+  assert.equal(plain.ease(), 'stock', 'ease() was intercepted on an unrelated path');
+});
+
+test('the V8 frame shape does not take the animation over', () => {
+  // This is the negative control that makes the two cases above mean something: with
+  // only the Gecko case, a patch that returned true unconditionally would also pass.
+  // If an engine ever stops emitting '@' frames, the fork stops intercepting -- which
+  // is a visible regression here instead of a silently static window animation.
+  const shell = makeShell();
+  let consulted = 0;
+  const ext = makeExt({
+    _chooseEffect: () => { consulted++; return {effect: 'e', profile: 'p'}; },
+  });
+  installInto(ext, shell);
+
+  const actor = {ease: function ease() { return 'stock'; }};
+  const result = withStack(V8_OPEN, () =>
+    shell.wm._shouldAnimateActor.call(shell.wm, actor, 1));
+
+  assert.equal(result, '_shouldAnimateActor',
+    'the V8 frame shape must not be recognised as a window-open path');
+  assert.equal(consulted, 0, '_chooseEffect was consulted on an unrecognised frame shape');
+  assert.equal(actor.ease(), 'stock', 'ease() was replaced on an unrecognised frame shape');
+});
+
+test('an unchosen effect still delegates to the original', () => {
+  // The stack matched, but no profile applies to this window. The patch has to fall
+  // through to the shell's own animation instead of swallowing it.
+  const shell = makeShell();
+  const ext = makeExt({_chooseEffect: () => undefined});
+  installInto(ext, shell);
+
+  const actor = {ease: function ease() { return 'stock'; }};
+  const result = withStack(GECKO_OPEN, () =>
+    shell.wm._shouldAnimateActor.call(shell.wm, actor, 1));
+
+  assert.equal(result, '_shouldAnimateActor',
+    'with no effect configured the shell animation must still run');
+  assert.equal(actor.ease(), 'stock', 'ease() must be left alone when nothing was chosen');
 });
