@@ -9,13 +9,13 @@
 ![Based on: Burn My Windows](https://img.shields.io/badge/based%20on-Burn%20My%20Windows-orange)
 [![Repository](https://img.shields.io/badge/repository-GitHub-black?logo=github)](https://github.com/SHADE-glitch/burn-my-windows)
 
-## 项目说明
+## 📖 项目说明
 
 本仓库是 **Simon Schneegans** 的 [**Burn My Windows**](https://github.com/Schneegans/Burn-My-Windows) 的**个人维护分支**，冻结在上游 **v48** 版本，以 `burn-my-windows@local` 为 UUID 在本地维护。
 
 本项目**与上游作者无关**，也未获得其背书。本分支完整保留上游功能，重点修复**稳定性、资源管理与启动性能**问题——即那些难以复现、却会在长时间运行的 GNOME Shell 会话中逐渐劣化体验的潜在 bug 与泄漏。
 
-## 功能特性
+## ✨ 功能特性
 
 - **26 种着色器特效**，用于窗口打开/关闭动画 —— Apparition、Aura Glow、Broken Glass、Doom、Energize A/B、Fire、Focus、Glide、Glitch、Hexagon、Incinerate、Matrix、Mushroom、Paint Brush、Pixelate、Pixel Wheel、Pixel Wipe、Portal、RGB Warp、Snap of Disintegration、Team Rocket、T-Rex Attack、TV Effect、TV Glitch、Wisps。全部通过 GLSL 着色器在 GPU 上渲染。
 - **配置档（Profile）机制** —— 每个配置档可按应用、动画类型、窗口类型、配色方案以及**电源模式 / 电源配置档**匹配，从而在接电时使用重特效、在电池时使用轻特效。
@@ -23,7 +23,7 @@
 - **34 种语言翻译**，包含简体与繁体中文。
 - **UPower / PowerProfiles 集成**（通过 D-Bus），支持感知电源状态的配置档。
 
-## 前置依赖
+## 🧰 前置依赖
 
 | 依赖 | 说明 |
 |---|---|
@@ -31,7 +31,7 @@
 | GNOME Shell | 45 – 50 |
 | 构建工具 | `glib-compile-resources`、`glib-compile-schemas`、`make` |
 
-## 安装
+## 📥 安装
 
 本分支没有打包步骤，作为**本地扩展就地使用**：
 
@@ -53,11 +53,11 @@ gnome-extensions disable burn-my-windows@local
 rm -rf ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 ```
 
-## 使用
+## 🖱️ 使用
 
 打开 **GNOME 设置 → 扩展 → Burn My Windows → 设置**。在预览列表中选择特效，再调整其参数。可创建配置档，将特效限定到特定应用、窗口类型或电源状态。
 
-## 测试
+## 🧪 测试
 
 三层，必须按顺序跑。完整手册——每层能证明什么、不能证明什么，私有 API 清单、兼容分支矩阵、
 回滚配方——都在 [MAINTENANCE.md](MAINTENANCE.md)。
@@ -78,13 +78,13 @@ L1 完全隔离：私有 D-Bus socket、`GSETTINGS_BACKEND=memory`、独立的
 `XDG_CONFIG_HOME` / `XDG_DATA_HOME` / `XDG_RUNTIME_DIR`；并且只要 `~/.config/dconf/user`、
 profile 目录与工作树与开跑前不是逐字节一致，它就拒绝报绿。
 
-## 偏好设置
+## ⚙️ 偏好设置
 
 - **全局：** 当前配置档、预览特效、测试模式。
 - **单特效：** 启用开关、动画时长及特效专属参数（颜色、缩放、速度等）。
 - **配置档：** 按应用、动画类型、窗口类型、配色方案、电源模式与电源配置档匹配。
 
-## 相对上游的改动（v48）
+## 🆚 相对上游的改动（v48）
 
 本分支在上游 v48 基线（`16ab10a`）之上新增维护提交。此处刻意不写死数量——
 `git rev-list --count 16ab10a..HEAD` 才是权威，写死的数字总会漂移。
@@ -100,11 +100,11 @@ profile 目录与工作树与开跑前不是逐字节一致，它就拒绝报绿
 - **构建：** 从编译后的资源包中恢复 74 个着色器/UI/资源源文件，并新增 `Makefile`。
 - **清理：** 移除死代码（`getUIDir()`、`Shader._time`、注释掉的 `mushroom-8bit-enable` 键）。
 
-## 参与贡献
+## 🤝 参与贡献
 
 欢迎提交 Issue 与 Pull Request。请保持改动范围聚焦，并针对上述 GNOME Shell 版本进行测试。
 
-## 致谢与来源说明
+## 🙏 致谢与来源说明
 
 本扩展是 **Simon Schneegans** 的 **Burn My Windows** 的**维护分支**。原始设计、着色器、特效与偏好设置均出自其手。
 
@@ -113,7 +113,7 @@ profile 目录与工作树与开跑前不是逐字节一致，它就拒绝报绿
 - **分支基线：** 上游 **v48**（提交 `16ab10a`，"baseline: v48 upstream fork, before fixes"）
 - **其他版权：** Team Rocket 特效版权归 Justin Garza 所有。
 
-## 许可证
+## ⚖️ 许可证
 
 本项目采用 **GNU 通用公共许可证 v3.0 或更高版本** —— 见 [LICENSE](LICENSE)。
 

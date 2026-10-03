@@ -9,13 +9,13 @@ Disintegrate your windows with style.
 ![Based on: Burn My Windows](https://img.shields.io/badge/based%20on-Burn%20My%20Windows-orange)
 [![Repository](https://img.shields.io/badge/repository-GitHub-black?logo=github)](https://github.com/SHADE-glitch/burn-my-windows)
 
-## About
+## 📖 About
 
 This repository is a **personal maintenance fork** of [**Burn My Windows**](https://github.com/Schneegans/Burn-My-Windows) by **Simon Schneegans**, frozen at upstream **v48** and maintained locally under the UUID `burn-my-windows@local`.
 
 It is **not** affiliated with or endorsed by the upstream author. The fork keeps the upstream feature set intact and focuses on **stability, resource management and startup performance** — the kind of latent bugs and leaks that are hard to reproduce but degrade a long-running GNOME Shell session.
 
-## Features
+## ✨ Features
 
 - **26 shader-based effects** for window open/close animations — Apparition, Aura Glow, Broken Glass, Doom, Energize A/B, Fire, Focus, Glide, Glitch, Hexagon, Incinerate, Matrix, Mushroom, Paint Brush, Pixelate, Pixel Wheel, Pixel Wipe, Portal, RGB Warp, Snap of Disintegration, Team Rocket, T-Rex Attack, TV Effect, TV Glitch and Wisps. All rendering is done on the GPU via GLSL shaders.
 - **Profile-based configuration** — each profile can match on application, animation type, window type, color scheme and **power mode / power profile**, so you can run heavy effects on AC and light ones on battery.
@@ -23,7 +23,7 @@ It is **not** affiliated with or endorsed by the upstream author. The fork keeps
 - **34 translations**, including Simplified and Traditional Chinese.
 - **UPower / PowerProfiles integration** via D-Bus for power-aware profiles.
 
-## Prerequisites
+## 🧰 Prerequisites
 
 | Requirement | Details |
 |---|---|
@@ -31,7 +31,7 @@ It is **not** affiliated with or endorsed by the upstream author. The fork keeps
 | GNOME Shell | 45 – 50 |
 | Build tools | `glib-compile-resources`, `glib-compile-schemas`, `make` |
 
-## Installation
+## 📥 Installation
 
 This fork has no packaging step — it is used **in place** as a local extension:
 
@@ -53,11 +53,11 @@ gnome-extensions disable burn-my-windows@local
 rm -rf ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 ```
 
-## Usage
+## 🖱️ Usage
 
 Open **GNOME Settings → Extensions → Burn My Windows → Settings**. Pick an effect from the preview list, then tune its parameters. Create profiles to scope effects to specific applications, window types or power states.
 
-## Testing
+## 🧪 Testing
 
 Three layers, always run in order. The full playbook — what each layer can and cannot
 prove, the private-API inventory, the compatibility matrix and the rollback recipe — is
@@ -80,13 +80,13 @@ L1 is fully isolated: a private D-Bus socket, `GSETTINGS_BACKEND=memory`, scratc
 unless `~/.config/dconf/user`, the profile directory and the working tree are
 byte-identical to before the run.
 
-## Preferences
+## ⚙️ Preferences
 
 - **Global:** active profile, preview effect, test mode.
 - **Per effect:** enable toggle, animation time and effect-specific parameters (colors, scale, speed, …).
 - **Profiles:** matching rules on app, animation type, window type, color scheme, power mode and power profile.
 
-## Changes vs upstream (v48)
+## 🆚 Changes vs upstream (v48)
 
 This fork adds maintenance commits on top of the upstream v48 baseline (`16ab10a`).
 The count is deliberately not stated — `git rev-list --count 16ab10a..HEAD` is authoritative and a hardcoded number always drifts.
@@ -102,11 +102,11 @@ The count is deliberately not stated — `git rev-list --count 16ab10a..HEAD` is
 - **Build:** restored 74 shader/UI/asset sources from the compiled bundle and added a `Makefile`.
 - **Cleanup:** removed dead code (`getUIDir()`, `Shader._time`, commented `mushroom-8bit-enable` key).
 
-## Contributing
+## 🤝 Contributing
 
 Issues and pull requests are welcome. Please keep changes scoped and test them against the GNOME Shell versions listed above.
 
-## Credits & Attribution
+## 🙏 Credits & Attribution
 
 This extension is a **maintenance fork** of **Burn My Windows** by **Simon Schneegans**. All original design, shaders, effects and preferences are their work.
 
@@ -115,7 +115,7 @@ This extension is a **maintenance fork** of **Burn My Windows** by **Simon Schne
 - **Fork baseline:** upstream **v48** (commit `16ab10a`, "baseline: v48 upstream fork, before fixes")
 - **Additional copyright:** the Team Rocket effect is © Justin Garza.
 
-## License
+## ⚖️ License
 
 Licensed under the **GNU General Public License v3.0 or later** — see [LICENSE](LICENSE).
 
