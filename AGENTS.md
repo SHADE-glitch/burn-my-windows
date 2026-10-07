@@ -100,3 +100,23 @@ fork of Burn-My-Windows, used in place with no install step.
 - `README.md` and `README.zh-CN.md` are a **two-file bilingual pair** — edit both.
 - Commit code first, docs in a separate commit. Commit messages use **Chinese subjects
   with English conventional-commit prefixes** (`fix:` / `perf:` / `docs:` / `chore:`).
+
+## Recording conventions
+- Behaviour changes land in `CHANGELOG.md` as `D-###` entries; ids are monotonic and **never
+  reused**, so a gap means an entry was deleted — `check:log` fails on that rather than calling it
+  cleanup. A window with zero entries is also a failure: a check over an empty set proves nothing.
+- `kind` ∈ `fix` | `perf` | `taste` | `guard` | `revert` | `chore`, cut by **who may demand a
+  revert**: bug → `fix`; measurable degradation, not correctness → `perf`; only my taste → `taste`
+  (zero obligation, discardable wholesale on an upgrade); no behaviour change, detects drift →
+  `guard`; withdraws earlier work → `revert`; cleanup with no obligation either way → `chore`.
+  A commit that is two things becomes two entries citing one hash — done so for `f4cba97`
+  (D-010 guard / D-011 perf / D-012 perf) and `038c903` (D-019 fix / D-020 guard).
+- `guard` is not a synonym for `fix` here: the sentinel list (§5) and the compatibility matrix (§6)
+  are judged by *"can it be provoked once"*, not by *"does the suite pass"*.
+- An entry is an assertion **as of its commit**, not current state. Never re-verify an old entry;
+  never hand-copy an aggregate count — `npm run check:log`, `make` and the §12 baseline commands
+  print them. Measured µs/ms figures inside entries are *that day's* measurements.
+- Known-but-not-fixed issues stay in `MAINTENANCE.md` §13; they have no commit, so no entry.
+- `Symptom` names the mechanism, never the session: no window titles, no application names from a
+  real desktop, no screen-recording content.
+- Run `npm run check:log` before committing docs; bare `node scripts/check-log.mjs` also works.

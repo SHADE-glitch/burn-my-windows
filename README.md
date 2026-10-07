@@ -90,6 +90,11 @@ byte-identical to before the run.
 
 This fork adds maintenance commits on top of the upstream v48 baseline (`16ab10a`).
 The count is deliberately not stated — `git rev-list --count 16ab10a..HEAD` is authoritative and a hardcoded number always drifts.
+Every divergence below is recorded commit-by-commit in [CHANGELOG.md](CHANGELOG.md) with its kind,
+its evidence tier and its hash, and `npm run check:log` proves that record covers every commit in
+the window that touched `extension.js` or `src/`. `MAINTENANCE.md` still owns the how-to-verify
+half; this section and CHANGELOG.md do not copy each other.
+
 
 - **Crash fixes:** stale pointer in Incinerate/Pixel Wipe, `actor.height` clamp in Doom, null-pipeline guards in texture-binding callbacks, null `meta_window` guard, partial-enable rollback when `_doEnable()` throws, overview-clone cleanup scoped to the owning clone.
 - **Stability:** the end-of-animation handler no longer touches a window actor that has already been destroyed, which used to log three `has been already disposed` criticals per occurrence.
