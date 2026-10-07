@@ -18,7 +18,7 @@ set -u
 HARNESS=$(cd "$(dirname "$0")" && pwd)
 WORK=${BMW_WORK:-/tmp/bmw-harness}
 OUT=$WORK/out
-ALL_PROBES="01 02 03 04 05"
+ALL_PROBES="01 02 03 04 05 06 07"
 
 if [ $# -lt 1 ]; then
 	cat >&2 <<EOF
