@@ -72,7 +72,7 @@ npm run check && npm test          # L0: static, seconds, no display needed
 | Layer | Proves | Cannot prove |
 |---|---|---|
 | **L0** static gates | stale compiled artifacts, the 26 effects registered in all 8 places, sentinel/patch bookkeeping, the take-over branch on a synthetic stack | any runtime behaviour |
-| **L1** headless probes | the 18 private APIs still exist on *this* GNOME, which compatibility branch is taken, shader/uniform resolution, real windows animating each effect, leak-free disable | smoothness, GPU cost, whether an effect looks right |
+| **L1** headless probes | the 18 private APIs still exist on *this* GNOME, which compatibility branch is taken, shader/uniform resolution, real windows animating each effect, leak-free disable, `enable()` main-thread budget, `begin_work`/`end_work` balance on interrupted animations | smoothness, absolute GPU cost, whether an effect looks right |
 | **L2** real session | everything a human can see — after log out / log in | nothing, but it is not automatable |
 
 L1 is fully isolated: a private D-Bus socket, `GSETTINGS_BACKEND=memory`, scratch

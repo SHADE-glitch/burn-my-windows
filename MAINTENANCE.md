@@ -77,10 +77,36 @@ node --test test/build-freshness.test.mjs | grep -c '^not ok'
 | 03 | `animation-dispatch` | 21 | `_chooseEffect` 预览分支与其清空契约；用**真名**叫 `_mapWindow` / `_destroyWindow` 的函数产生真 SpiderMonkey `@` 帧，驱动接管分支；真 `_setupEffect` 附着/收尾与 dispose 竞态 |
 | 04 | `lifecycle-residue` | 17 | `disable()` 后 8 处补丁身份还原、handler 归零、bundle 注销；再 enable 是**新闭包**；profile 增删时 handler 数量按比例（泄漏表现为 3 倍） |
 | 05 | `window-animation` | 5 | mutter 真的映射窗口、真的按 `preview-effect` 播了指定特效、`update-animation` 每帧有数（= 合成器真的画了这个 shader） |
+| 06 | `main-thread-budget` | 20 | `enable()` 在单 profile 与 20 profile 下各阻塞主线程多久；懒代理是否退化回启动期构造；无约束 profile 是否真的完全不碰总线 |
+| 07 | `global-state-balance` | 3 | `begin_work` / `end_work` 与 unredirect 在**动画没走完**的路径上是否仍然配平（正常关闭 / 动画中 `kill -9` / 动画中 disable / 动画中最小化 / 概览中关闭） |
 
-2026-10-01 在 GNOME Shell 50.1 上的一次干净运行：**5 个探针全部 PASS，合计 66 个 checks**；
+2026-10-01 的一次干净运行：**7 个探针全部 PASS，合计 89 个 checks**；
 探针 05 里 26/26 窗口成功映射并播放，每轮 70–73 帧，`_progress` 恒为 0.5，收尾全部回池，
 指向前扩展自身路径的 CRITICAL 为 0 条。
+
+### 06 / 07 这两道门为什么单独存在
+
+它们针对的问题**不抛异常、不报警、不改行为**，只改变整台机器的运行质感：
+
+- 启动时在主线程上同步做 IO / D-Bus。本 fork 的历史里真发生过一次：代理在
+  `_doEnable()` 里同步构造，顶穿 GDM fallback greeter 的约 12 s 超时，把整个登录拖坏。
+  所以 06 直接断言"enable() 期间两个代理都没被构造"，把这类回归钉住。
+- 全局状态配平错位。`beginAnimation()` 调 `global.begin_work()` 与
+  `compositor.disable_unredirect()`，对应的 `end_work()` / `enable_unredirect()` **只**在
+  `endAnimation()` 里发生，而它由 timeline 的 `stopped` 信号驱动；timeline 又是
+  `set_actor(actor)` 绑在 **actor 时钟**上的——actor 不再被绘制就不推进。任何"动画没走完"
+  的路径都可能把工作计数永久留在错误状态，表现为不空闲、耗电、全屏掉帧，
+  而没人会把它联想到一个窗口特效插件。
+
+实测结论：**没有泄漏**。插桩直接计数（`global.begin_work` / `end_work` 在 Eval 里可写，
+已验证）显示五条路径全部归还着色器，会话总计 **34 起 / 34 止**完全配平；
+`_doDisable()` 确实不主动结束在飞的动画，但没有留下悬挂的工作计数。
+
+> 一条被移除的假阳性值得记住：按场景切片计数曾报 `overview-close 12 起 / 13 止`，
+> 而会话总计是 34/34——一个动画可以合法地跨到下一个场景才结束。留着这种会误报的断言
+> 只会训练人去无视红灯。因此 07 断言的是与边界无关的量：逐场景要求"shader 必须归还"，
+> 全局要求"会话配平"，外加"同时在飞数不得无界增长"。
+
 
 **但探针 05 的像素对照层是 SKIP，不是 PASS**：`org.gnome.Shell.Screenshot.Screenshot`
 在沙箱里返回 `Gio.IOErrorEnum: Timeout was reached`（三个取样点 `fire` / `matrix` / `snap`
@@ -285,12 +311,17 @@ fork 的全部生存能力都压在 GNOME Shell 的私有接口上。`_doEnable(
 
 **能当判据**：`checks` 全绿、哨兵告警计数为 0、`already disposed` 计数为 0、
 disable 后 8 处补丁身份相等、`_profileSignalIds` 与 profile 数成比例、零写入三哈希不变、
-探针 05 每个特效的 `update-animation` 帧数 > 0。
+探针 05 每个特效的 `update-animation` 帧数 > 0、
+探针 07 的 `begin_work` 与 `end_work` **会话总计**相等、
+探针 06 的 `enable()` 耗时是否越过预算线（60 ms / 250 ms）。
 
 **不能当判据**：
 
-- 沙箱里的任何耗时数字。软件渲染（llvmpipe）与真实 GPU 不可比——同类测量在本 workspace
-  曾把一次填充从桌面 ~757 ms 量成沙箱 5355 ms。
+- 沙箱里的任何耗时数字的**绝对值**。软件渲染（llvmpipe）与真实 GPU 不可比——同类测量在
+  本 workspace 曾把一次填充从桌面 ~757 ms 量成沙箱 5355 ms。所以 06 的 `enable()` 数字
+  只能当**同机纵向**趋势用（这次 5 ms，下次变 40 ms 才是要警觉），不能当横向结论。
+- 探针 07 的**逐场景** begin/end 差值。见上面的假阳性说明：跨场景收尾会合法地让某个窗口
+  内 ends > begins。只有会话总计是不变量。
 - 单个特效"帧数对不对"。`update-animation` 计数只证明合成器画了，不图画得对。
 - teardown 时的 GLib CRITICAL 总量：沙箱关闭会喷一堆与 fork 无关的 shell 内部
   `dateMenu.js already disposed`。`run.sh` 因此只把**指向前扩展自身路径**的那部分算失败，
@@ -377,7 +408,10 @@ GType 是否稳定、disable 后有没有残留、dispose 竞态会不会抛、�
 | 兼容分支站点 | 8 |
 | 哨兵符号 | 18（11 函数 + 2 访问器 + 4 字段 + 1 数组检查） |
 | L0 | `npm test` 29 个用例（4 个门）；`npm run check` 覆盖 extension.js / prefs.js / src 共 34 个文件 |
-| L1 | 5 个探针 / 66 个 checks；单探针独占一次 shell 启动，冷启动约 20 s，`run.sh all` 约 5–6 分钟 |
+| L1 | 7 个探针 / 89 个 checks；单探针独占一次 shell 启动，冷启动约 20 s，`run.sh all` 约 8–9 分钟 |
+| enable() 主线程阻塞 | 5 ms（1 profile）/ 30 ms（20 profiles） |
+| begin_work / end_work | 会话总计配平（一轮实测 34 / 34），五条异常收尾路径全部归还着色器 |
+| 动画路径总线 | 无约束 profile：0 次；有电源约束：第一次 4.4 ms，之后 52–88 µs |
 | L1 观测值 | 着色器 26 个 GType、两轮往返约 140 ms；探针 05 每特效 70–73 帧 |
 | 每 profile 的 settings handler | 8（`_profileSignalIds` 的长度就是泄漏计数） |
 | 已验证平台 | Ubuntu 26.04.1 / GNOME Shell 50.1 / gjs 1.88 / Wayland，2026-10-01 |
@@ -390,6 +424,20 @@ GType 是否稳定、disable 后有没有残留、dispose 竞态会不会抛、�
 
 ## 13. 已知不修 / 待确认
 
+- **设了电源档位约束的 profile，登录后第一次匹配动画付 4.4 ms 同步 D-Bus**（实测
+  `4437 / 88 / 52` µs，即一次性的）。4.4 ms 是 60 Hz 一帧（16.7 ms）的约 26%，理论上
+  是登录、解锁或切换电源后第一次开合窗的一次抖动。**决定：不改。**
+  把代理构造从 `enable()` 挪走正是当年修那次启动事故的做法，为消掉一次性 4.4 ms
+  而重新改动这个已验证的启动设计，按"稳定性 > 性能"不划算。
+  若将来真要改，正确落点是已有的 `_warmShaders()` 空闲泵（低优先级、每 tick 一件事），
+  在那里各调一次 `_getUpowerProxy()` / `_getPowerProfilesProxy()`，
+  **不要**放回 `enable()`。
+  注意：只有 profile 设了 `profile-power-mode` 或 `profile-power-profile` 才会走到；
+  无约束 profile 的动画路径一次总线都不碰（`extension.js:953` 的
+  `if (matches && c.powerProfile != 0)`），当前用户配置就属于这种。
+- **`_doDisable()` 不主动结束正在播放的动画**。07 实测这种情况下全局状态仍然配平
+  （shader 被 timeline 自己带着走完并回收），所以这不是待修项；但它是上面那条
+  actor-clock 风险的来源，改动 disable 路径前必须重跑 07。
 - **`enable()` 不幂等**（上游行为，非 fork 引入，**不修**）：在没有 `disable()` 的情况下第二次
   `enable()` 会在导出 D-Bus 对象时抛
   `An object is already exported for the interface org.gnome.shell.extensions.BurnMyWindows`，
