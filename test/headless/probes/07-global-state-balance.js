@@ -25,12 +25,11 @@
 	const H = globalThis.__bmw;
 	try {
 		H.begin('07');
-		const { Main, inst } = await H.boot({ settings: { 'test-mode': true } });
-		const GLib = imports.gi.GLib;
-
-		inst._ensureEffects();
 
 		// ------------------------------------------------ direct begin_work/end_work count
+		// Installed BEFORE boot(): instrumenting after enable() let a begin_work issued
+		// during shell/extension startup sit outside the counters while its end_work landed
+		// inside, which produced 34 begins / 35 ends and looked like an unbalanced pair.
 		let begins = 0, ends = 0, workInstrumented = false;
 		try {
 			const realBegin = global.begin_work.bind(global);
@@ -43,6 +42,18 @@
 			H.rec('workInstrumentError', String(e).split('\n')[0]);
 		}
 		H.rec('workCountersInstrumented', workInstrumented);
+
+		const { Main, inst } = await H.boot({ settings: { 'test-mode': true } });
+		const GLib = imports.gi.GLib;
+		inst._ensureEffects();
+
+		// Baseline the very thing the counters cannot attribute: the shell calls
+		// begin_work/end_work itself (window transitions, compositor animations), so an
+		// unmatched unit may have been opened before this Eval ever ran. Equality across the
+		// probe is therefore NOT an invariant -- the invariant is that this probe never
+		// *widens* the outstanding gap.
+		const outstandingAtStart = begins - ends;
+		H.rec('outstandingAtStart', outstandingAtStart);
 
 		const startWindow = async (nick, tag) => {
 			inst._settings.set_string('active-profile', inst._profiles[0].path);
@@ -187,12 +198,24 @@
 		H.chk('noUnboundedWorkAccumulation', worst <= 2 ? true :
 			`up to ${worst} animations outstanding at once across five scenarios -- the shell would never go idle`);
 
-		// Global, not per-scenario: the session as a whole must not have accumulated work.
+		// What this probe is allowed to claim. Two measured facts shape it:
+		//  * begins === ends is NOT reachable as an invariant -- the shell has its own
+		//    begin_work/end_work callers, and one pre-existing unit straddles the probe.
+		//    Run 1 reported 34/34, run 2 reported 34/35, with no behavioural difference in
+		//    the fork. A check that flips green/red on that is a coin toss, not a gate.
+		//  * the direction that would actually hurt is begins OUTRUNNING ends and staying
+		//    that way (shell permanently "working": no idle, battery, fullscreen jank).
+		// So: the outstanding gap must not be wider at the end than at the start, and it
+		// must never grow beyond a handful of concurrent animations mid-run.
 		if (workInstrumented) {
-			H.chk('sessionWorkBalanced', begins === ends ? true :
-				`${begins} begin_work vs ${ends} end_work across the probe -- the shell is left permanently "working"`);
+			const outstandingAtEnd = begins - ends;
+			H.chk('probeDidNotWidenTheWorkGap', outstandingAtEnd <= outstandingAtStart ? true :
+				`outstanding work went ${outstandingAtStart} -> ${outstandingAtEnd} (${begins} begin_work vs ${ends} end_work): at least one animation left the shell "working" with nothing to finish it`);
 			H.metric('beginWork', begins);
 			H.metric('endWork', ends);
+			H.metric('outstandingStart', outstandingAtStart);
+			H.metric('outstandingEnd', outstandingAtEnd);
+			H.rec('counterCaveat', 'these counters are process-wide: gnome-shell itself calls begin_work/end_work, so they bound the damage rather than attribute it to the fork');
 		} else {
 			H.rec('globalWorkCounters', 'unavailable: global.begin_work/end_work are not writable from Eval; the per-scenario pool check above is what ran');
 		}
