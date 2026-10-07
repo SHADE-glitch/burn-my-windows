@@ -98,9 +98,18 @@ node --test test/build-freshness.test.mjs | grep -c '^not ok'
   的路径都可能把工作计数永久留在错误状态，表现为不空闲、耗电、全屏掉帧，
   而没人会把它联想到一个窗口特效插件。
 
-实测结论：**没有泄漏**。插桩直接计数（`global.begin_work` / `end_work` 在 Eval 里可写，
-已验证）显示五条路径全部归还着色器，会话总计 **34 起 / 34 止**完全配平；
+实测结论：**没有泄漏**。五条路径全部归还着色器（这是可归因的硬门禁，两轮实测均 5/5）；
 `_doDisable()` 确实不主动结束在飞的动画，但没有留下悬挂的工作计数。
+
+> **`begin_work` / `end_work` 的"会话相等"不是有效不变量，别用它当判据。**
+> 我第一次拿它报"34 起 / 34 止完全配平"，第二次同样的代码给出 34 / 35，扩展行为毫无变化。
+> 两个原因：插桩若装在 `enable()` 之后，启动期的一次 `begin_work` 会落在窗外而其
+> `end_work` 落在窗内（方向就是证据：真泄漏应当是 begins 追不上 ends）；更根本的是
+> `global.begin_work/end_work` 是**整个 shell 进程共享**的，gnome-shell 自己也在调用，
+> 因此这个计数器无法归因到本扩展，只能界定损害范围。
+> 07 现在断言的是：插桩在 `boot()` 之前（两轮实测 36 / 36，首尾 outstanding 均为 0）、
+> **本探针不得让未配平差额比开始时更宽**、同时在飞数不得无界增长、以及上面那条
+> 逐场景着色器归还。总数只作 metric 供同机纵向比较。
 
 > 一条被移除的假阳性值得记住：按场景切片计数曾报 `overview-close 12 起 / 13 止`，
 > 而会话总计是 34/34——一个动画可以合法地跨到下一个场景才结束。留着这种会误报的断言
@@ -312,7 +321,7 @@ fork 的全部生存能力都压在 GNOME Shell 的私有接口上。`_doEnable(
 **能当判据**：`checks` 全绿、哨兵告警计数为 0、`already disposed` 计数为 0、
 disable 后 8 处补丁身份相等、`_profileSignalIds` 与 profile 数成比例、零写入三哈希不变、
 探针 05 每个特效的 `update-animation` 帧数 > 0、
-探针 07 的 `begin_work` 与 `end_work` **会话总计**相等、
+探针 07 的"本探针未让 `begin_work` 差额变宽"、
 探针 06 的 `enable()` 耗时是否越过预算线（60 ms / 250 ms）。
 
 **不能当判据**：
@@ -320,8 +329,9 @@ disable 后 8 处补丁身份相等、`_profileSignalIds` 与 profile 数成比�
 - 沙箱里的任何耗时数字的**绝对值**。软件渲染（llvmpipe）与真实 GPU 不可比——同类测量在
   本 workspace 曾把一次填充从桌面 ~757 ms 量成沙箱 5355 ms。所以 06 的 `enable()` 数字
   只能当**同机纵向**趋势用（这次 5 ms，下次变 40 ms 才是要警觉），不能当横向结论。
-- 探针 07 的**逐场景** begin/end 差值。见上面的假阳性说明：跨场景收尾会合法地让某个窗口
-  内 ends > begins。只有会话总计是不变量。
+- 探针 07 的 **begin/end 会话相等性**（含逐场景差值）。跨场景收尾会合法地让某个窗口内
+  ends > begins，而 gnome-shell 自身也调用这两个函数。可用的是"差额没有变宽"和
+  "逐场景着色器归还"。
 - 单个特效"帧数对不对"。`update-animation` 计数只证明合成器画了，不图画得对。
 - teardown 时的 GLib CRITICAL 总量：沙箱关闭会喷一堆与 fork 无关的 shell 内部
   `dateMenu.js already disposed`。`run.sh` 因此只把**指向前扩展自身路径**的那部分算失败，
@@ -408,9 +418,10 @@ GType 是否稳定、disable 后有没有残留、dispose 竞态会不会抛、�
 | 兼容分支站点 | 8 |
 | 哨兵符号 | 18（11 函数 + 2 访问器 + 4 字段 + 1 数组检查） |
 | L0 | `npm test` 29 个用例（4 个门）；`npm run check` 覆盖 extension.js / prefs.js / src 共 34 个文件 |
-| L1 | 7 个探针 / 89 个 checks；单探针独占一次 shell 启动，冷启动约 20 s，`run.sh all` 约 8–9 分钟 |
+| L1 | 7 个探针 / 89 个 checks；单探针独占一次 shell 启动，冷启动约 20 s，`run.sh all` 约 5–6 分钟 |
+| 跨次稳定性 | 探针 07 连跑两次结果一致（3/3，36/36）；第一版曾因 34/34 与 34/35 之间抖动而暴露断言无效 |
 | enable() 主线程阻塞 | 5 ms（1 profile）/ 30 ms（20 profiles） |
-| begin_work / end_work | 会话总计配平（一轮实测 34 / 34），五条异常收尾路径全部归还着色器 |
+| begin_work / end_work | 插桩提前后两轮实测均 36 / 36、首尾 outstanding 0；五条异常收尾路径全部归还着色器（**相等不是判据，"差额未变宽"才是**） |
 | 动画路径总线 | 无约束 profile：0 次；有电源约束：第一次 4.4 ms，之后 52–88 µs |
 | L1 观测值 | 着色器 26 个 GType、两轮往返约 140 ms；探针 05 每特效 70–73 帧 |
 | 每 profile 的 settings handler | 8（`_profileSignalIds` 的长度就是泄漏计数） |
