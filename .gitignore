@@ -1,0 +1,14 @@
+# Editor / OS cruft.
+*.swp
+*~
+.DS_Store
+.idea/
+.vscode/
+
+# A stray local install. The repo has no dependencies, so `npm test` never needs
+# this; the rule only keeps one out of `git status` if it ever appears.
+node_modules/
+
+# NOTE: resources/burn-my-windows.gresource and schemas/gschemas.compiled are
+# compiled artifacts that this repo tracks ON PURPOSE (used in place, no install
+# step — see AGENTS.md § Build and the Makefile). Do not add rules for them.
