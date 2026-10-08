@@ -96,6 +96,18 @@ fork of Burn-My-Windows, used in place with no install step.
   `GSETTINGS_BACKEND=memory` is per-process; probes set settings through
   `stateObj._settings` inside the sandboxed shell.
 
+## CI
+- `.github/workflows/ci.yml` runs the **L0 gates only** on every push and pull request:
+  `npm test`, `npm run check`, `npm run check:log`, on Node 20 / `ubuntu-latest`.
+  **They must stay green.** A red CI run is the same signal as a red local run, because
+  the workflow runs exactly the three commands a maintainer runs by hand.
+- The **L1 headless layer is deliberately not run in CI** — it needs a real GNOME Shell
+  process (§ Tests, MAINTENANCE.md §1), which a hosted runner does not provide. Never
+  "fix" a red CI by adding a step that needs a display.
+- `check:log` needs the full history: the checkout sets `fetch-depth: 0` because the
+  gate resolves the coverage anchor (`16ab10a`) and walks `anchor..HEAD`. A shallow
+  checkout fails it for the wrong reason.
+
 ## Docs & Commits
 - `README.md` and `README.zh-CN.md` are a **two-file bilingual pair** — edit both.
 - Commit code first, docs in a separate commit. Commit messages use **Chinese subjects
@@ -120,3 +132,14 @@ fork of Burn-My-Windows, used in place with no install step.
 - `Symptom` names the mechanism, never the session: no window titles, no application names from a
   real desktop, no screen-recording content.
 - Run `npm run check:log` before committing docs; bare `node scripts/check-log.mjs` also works.
+
+## Release / version
+- The extension version lives in exactly one place: `version` in `metadata.json`. Bump it
+  when a change should reach users as a new version — it is the only number GNOME's
+  extension tooling reads, and leaving it stale makes an updated fork look unchanged.
+  It is not tied to the upstream baseline (`v48`) or to any commit count.
+- `shell-version` in the same file lists the GNOME majors this fork targets. Keep every
+  entry a plain major (`"50"`, not `"50.1"`) — `_isOutOfDate` matches by prefix, so a
+  decimal would over-claim (see § Version Gating).
+- `CHANGELOG.md` is **not** a release log keyed to this number: it records deviations as
+  `D-###` entries against commit hashes, independent of `version`. Do not couple the two.
