@@ -1,0 +1,33 @@
+# CI for burn-my-windows@local — the L0 static gates only.
+#
+# `npm test`, `npm run check` and `npm run check:log` are all static: no display,
+# no gjs, no network, no dependencies. The L1 headless layer needs a real GNOME
+# Shell process and is deliberately NOT run here — see AGENTS.md § CI and
+# MAINTENANCE.md §1 for what each layer can and cannot prove.
+#
+# The step commands are exactly the ones a maintainer runs by hand, so a red CI
+# run and a red local run mean the same thing.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  static:
+    name: L0 static gates
+    runs-on: ubuntu-latest
+    steps:
+      # Full history: check:log resolves the coverage anchor (16ab10a) and walks
+      # `anchor..HEAD`. A default shallow (depth 1) checkout cannot see the anchor
+      # and the gate fails for the wrong reason.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm test
+      - run: npm run check
+      - run: npm run check:log
