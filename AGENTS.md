@@ -107,6 +107,20 @@ fork of Burn-My-Windows, used in place with no install step.
 - `check:log` needs the full history: the checkout sets `fetch-depth: 0` because the
   gate resolves the coverage anchor (`16ab10a`) and walks `anchor..HEAD`. A shallow
   checkout fails it for the wrong reason.
+- **Keep CI in step with the code.** Update `.github/workflows/ci.yml` in the *same change* that
+  makes it stale — never as a later cleanup.
+- **New or renamed tests need no CI edit** as long as CI runs the suite command (`npm test`); it
+  does, so it picks them up automatically. Only touch CI if the *command itself* changes.
+- **Environment changes** — a new dependency, a Node version bump, or a new system tool — mean
+  updating the workflow's setup/install steps.
+- **Renamed or moved code**: `check:log` watches a declared list (`CODE_PATHS` in the checker). If a
+  watched path moves, update that list; the check goes red until you do.
+- **After a refactor**, confirm CI still exercises the real code and the declared paths still cover
+  it. A green CI that no longer touches the changed code is worse than a red one.
+- **A new verification tier** (headless / live) — decide explicitly whether CI runs it; do not add it
+  silently. The L1 headless layer stays out of CI unless a headless display is set up.
+- If what CI runs changes, update this section too. CI is a signal, not a gate, until branch protection
+  is enabled — read the result after every push.
 
 ## Docs & Commits
 - `README.md` and `README.zh-CN.md` are a **two-file bilingual pair** — edit both.
