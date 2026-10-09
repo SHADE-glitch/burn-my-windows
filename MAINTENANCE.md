@@ -36,17 +36,20 @@ npm run check   # node --check extension.js prefs.js + src/ 全部 32 个文件
 npm test        # test/*.test.mjs
 ```
 
-期望：`check` 无输出，`test` 报 `tests 29 / pass 29 / fail 0`（四个门）。
+期望：`check` 无输出；`test` 全绿。门数与用例数**由命令自己打印**，不要抄进任何文档；
 出现 `# SKIP` 要当失败读——被跳过的门等于不存在。
 
-四个门，各自抓一种"不会报错的错"：
+每个门各抓一种"不会报错的错"：
 
 | 文件 | 抓什么 |
 | --- | --- |
 | `test/build-freshness.test.mjs` | 编译产物陈旧：bundle 成员集合 vs 清单、逐成员 sha256 内容 vs 源文件、已编译 schema 键集合 vs XML、主键默认值 |
 | `test/effect-registry.test.mjs` | 26 个特效在 **8 个登记点**齐全，含 130 处 `dialog.bind*` 绑定的键同时存在于 schema 与其 `.ui` |
 | `test/sentinel-drift.test.mjs` | 哨兵三张表 ↔ `PATCHES` ↔ install/restore 守卫 ↔ warn 前缀互相咬合；外加探针纯度门 |
-| `test/patch-symmetry.test.mjs` | 8 处补丁成对装卸、绝不为上游已删的方法造桩；`Error` 形状栈帧驱动接管分支 |
+| `test/patch-symmetry.test.mjs` | 8 处补丁成对装卸、绝不为上游已删的方法造桩；`Error` 形状栈帧驱动接管分支，含 ease 覆写不回链、全特效关闭时归还概览等待 |
+| `test/proxy-retry.test.mjs` | 电源代理：失败后不在动画热路径上重建、重试有上界、`disable()` 取消定时器且允许 re-enable 重新尝试 |
+| `test/shader-warmup.test.mjs` | 着色器预热：只有成功才登记、一个失败不结束队列、失败留日志、跨 profile 去重、禁用后源自退 |
+| `test/repo.test.mjs` | 仓库自身的约定：README 双语对成对、无复选框、`reports/` 既被忽略也没被追踪 |
 
 **为什么需要 build-freshness 这一门**：本仓库把编译产物提交进 git 且没有安装步骤，所以改了
 `.frag` / `.ui` / schema 而忘记 `make`，运行时会**继续用旧产物并且报绿**。没有工具会告诉你这件事。
@@ -64,7 +67,7 @@ node --test test/build-freshness.test.mjs | grep -c '^not ok'
 ### L1 headless 探针（真 shell 进程，沙箱，分钟级）
 
 ```sh
-./test/headless/run.sh all      # 5 个探针，每个独占一次 shell 启动
+./test/headless/run.sh all      # 探针清单见 run.sh 的 ALL_PROBES，每个独占一次 shell 启动
 ./test/headless/run.sh 01       # 只跑升级后最该看的那个
 ```
 
@@ -285,7 +288,7 @@ fork 的全部生存能力都压在 GNOME Shell 的私有接口上。`_doEnable(
 | `src/Shader.js:193` | `Meta.enable_unredirect_for_display` | **不存在** → 走 else：`global.compositor.enable_unredirect()` | unredirect 永不恢复（注意：这段用 `disable` 的存在来决定是否调 `enable`） |
 | `src/Shader.js:154` | `meta_window.is_maximized` | 存在（49 加入）→ 走 if | `uIsFullscreen` 错 → shader padding 错 |
 | `src/Shader.js:219` | `Cogl.SnippetHook` | 存在 → Cogl 分支 | 所有 shader 构造失败 |
-| `src/utils.js:141` | `shellVersionIsAtLeast(48,'beta')` | true → `St.ImageContent.set_data` 带 Cogl context | 偏好设置预览图坏 |
+| `src/utils.js:141` | `shellVersionIsAtLeast(48,'beta')` | true → `St.ImageContent.set_data` 带 Cogl context | 5 个带贴图特效（paint-brush / matrix / broken-glass / snap / trex）纹理构造失败。**纠正**：`getImageResource()` 只在特效侧调用，`prefs.js` 完全不用它，所以旧写法"偏好设置预览图坏"是找错了人 |
 | `src/utils.js:198` | `shellVersionIsAtLeast(47,'alpha')` | true → `Cogl.Color.from_string` | `parseColor` 抛 → 特效发黑 |
 | `src/ShaderFactory.js:79` | `GObject.Object.new` | true（GJS 里几乎恒真，`newv` 是死支） | shader 根本构造不出来 |
 
@@ -417,13 +420,14 @@ GType 是否稳定、disable 后有没有残留、dispose 竞态会不会抛、�
 | 补丁处数 | 8 装 / 8 复，两侧都有守卫 |
 | 兼容分支站点 | 8 |
 | 哨兵符号 | 18（11 函数 + 2 访问器 + 4 字段 + 1 数组检查） |
-| L0 | `npm test` 29 个用例（4 个门）；`npm run check` 覆盖 extension.js / prefs.js / src 共 34 个文件 |
-| L1 | 7 个探针 / 89 个 checks；单探针独占一次 shell 启动，冷启动约 20 s，`run.sh all` 实测 3 分 22 秒（7 次冷启动 + 26 个真窗口） |
+| L0 | `npm test` 全绿（门数与用例数以命令输出为准，别抄）；`npm run check` 覆盖 extension.js / prefs.js / src 全部 js |
+| L1 | 探针与 checks 数量由 `run.sh` 打印；单探针独占一次 shell 启动，冷启动约 20 s，`run.sh all` 实测 3 分 22 秒（7 次冷启动 + 26 个真窗口，探针增删后这个时长要重测） |
 | 跨次稳定性 | 探针 07 连跑两次结果一致（3/3，36/36）；第一版曾因 34/34 与 34/35 之间抖动而暴露断言无效 |
 | 最近一次完整认证 | 2026-10-07 23:01，7 探针 89 checks 全 PASS，CRITICAL 0，零写入三哈希不变 |
 | enable() 主线程阻塞 | 5 ms（1 profile）/ 30 ms（20 profiles） |
 | begin_work / end_work | 插桩提前后两轮实测均 36 / 36、首尾 outstanding 0；五条异常收尾路径全部归还着色器（**相等不是判据，"差额未变宽"才是**） |
-| 动画路径总线 | 无约束 profile：0 次；有电源约束：第一次 4.4 ms，之后 52–88 µs |
+| 动画路径总线 | 首个**非预览**动画会构造 UPower 代理（沙箱 135 µs），之后 `OnBattery` 读本地缓存：gjs 1.88 实测 50 次读共 634 µs（≈13 µs/次，代理 `flags==0` ⇒ GIO 自持 PropertiesChanged 订阅）。有电源约束时第一次 4.4 ms（沙箱内 3299 µs），之后 28–70 µs |
+| ease 覆写落空 | 探针 05 的 `easeFallthroughsNatural`：26 个真窗口各开合一次实测 **0** 次 —— D-034 那条分支在 GNOME 50 / Wayland 的普通窗口流量下走不到，属潜在正确性而非当前故障 |
 | L1 观测值 | 着色器 26 个 GType、两轮往返约 140 ms；探针 05 每特效 70–73 帧 |
 | 每 profile 的 settings handler | 8（`_profileSignalIds` 的长度就是泄漏计数） |
 | 已验证平台 | Ubuntu 26.04.1 / GNOME Shell 50.1 / gjs 1.88 / Wayland，2026-10-01 |
@@ -458,8 +462,9 @@ GType 是否稳定、disable 后有没有残留、dispose 竞态会不会抛、�
   正常桌面流程走不到（一次登录一次 enable），**但探针走得到**：这就是为什么 04 必须用
   `stateObj.disable()` / `stateObj.enable()` 而不是 `EM._callExtensionDisable()`（后者根本不会
   释放任何东西）。若将来有改动让扩展在运行中被重启，这条会变成真问题。
-- **`WindowPicker` 的 LookingGlass 路径无任何自动化覆盖**（§7 第一行）。沙箱里点不动它，
-  探针 04 只能验证 D-Bus 对象被注销/重导出。升级后必须手点一次 "Select app"。
+- **`WindowPicker` 的 LookingGlass 路径只有半边覆盖**（§7 第一行）。探针 04 现在断言两次
+  `PickWindow()` 共用一个 inspector、且 `disable()` 把它交还；但"真的点中一个窗口"仍然只能
+  手点 —— 沙箱里没有指针输入，`target` 信号不会由 mutter 发出。升级后仍要手点一次 "Select app"。
 - `_chooseEffect()` 的第一个守卫是 `if (!actor.meta_window) return null`。给探针造的对象忘了
   这个字段，接管分支就永远走不到，并且会落回 shell 真实的 `_shouldAnimateActor`——后者要
   `actor.get_texture()`，于是在**探针**里抛异常，看起来像 fork 崩了。
@@ -467,12 +472,22 @@ GType 是否稳定、disable 后有没有残留、dispose 竞态会不会抛、�
   所以两个动画重叠时，先结束的那个会在另一个还在跑时就把 unredirect 打开。只影响全屏
   （例如全屏播放时关另一个窗口）。上游行为，非 fork 引入。**待你决定**，因为修它等于推翻上游机制。
 - `src/Shader.js:28` 与 `src/effects/Glide.js:37` 的注释写 `.glsl`，而 `:209` 实际加载 `.frag`。
-- `src/migrate.js:89` 会从迁移来的 keyfile 里剥掉 `test-mode=`，所以**迁移过的 profile 永远进不了测试模式**。
-  该文件其余已知脆弱（都是文本解析，只跑一次，由 `last-extension-version` 把关）：
+- `src/migrate.js` 的已知脆弱都是文本解析（只跑一次，由 `last-extension-version` 把关）：
   `r.includes(...)` 会匹配到 dconf dump 里别的键的字符串值内部；`replace('[/]\n','')` 与
   `replace('flame-','fire-')` 都是字面替换，只处理第一次出现；`^.*-preview-.*` 会删掉任何含
   `-preview-` 的行；重试去重比较的是精确 trim 后文本，格式一变就失效。
+  **撤回一条旧结论**：本节原先写"`:89` 从迁移来的 keyfile 里剥掉 `test-mode=`，所以迁移过的
+  profile 永远进不了测试模式"——不成立。`test-mode` 属于**主** schema
+  （`schemas/org.gnome.shell.extensions.burn-my-windows.gschema.xml`），只从 `this._settings`
+  读（`extension.js:1012`），而迁移根本不写主 schema：生成的 keyfile 里本来就不可能有这个键。
+  测试模式对迁移过的 profile 照常生效。
 - `_ALL_EFFECTS` 在 `extension.js` 与 `prefs.js` 里顺序不同（Mushroom 一个垫底一个排第 14）。
   这是合法的，所以所有比较都按**集合**做。
 - `test-mode` 对 4 个特效不播种（见 §8），所以它们的帧不参与可复现性断言。
+- `src/Shader.js:215` 的 `match.index` 没有 null 检查：`.frag` 若不含 `void main(){…}` 就
+  在构造期抛 TypeError。当前 26 个 `.frag` 全部由探针 02 证明可编译，所以它是**潜在**问题，
+  影响是"新增一个写错的 `.frag` 时报错位置难读"，不参与本轮修复。
+- 偏好对话框的 About 与"每开 10 次提示一次"的捐赠弹窗仍指向上游作者（`prefs.js:379-400`、
+  `:490-501`），而 `metadata.json:url` 指向本 fork。上游署名与许可证头**一律保留**；
+  About 的归属与 website/issues 指向要不要改成本仓库，属于设置页方案的一部分，未拍板前不动。
 - 沙箱里 `gjs` GTK4 客户端只证明"能开窗、能关窗、动画被接管"，不证明 GTK 应用在你机器上的其他行为。

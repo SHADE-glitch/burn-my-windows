@@ -22,10 +22,38 @@ fork of Burn-My-Windows, used in place with no install step.
   - Keep the `extensionThis` aliasing in mind: `enable()` sets `const extensionThis =
     this`, so a replacement that delegates must reach its original through that alias.
   - `test/patch-symmetry.test.mjs` enforces this. Run `npm test` after touching any
-    patch. As of 2026-09-29 all 8 guards are in place and the suite is green; replacing
-    any single one of them with `if (true)` is caught, so none of the 8 is decoration.
+    patch. Replacing any single guard with `if (true)` is caught, so none of the 8 is
+    decoration — re-prove it after edits rather than trusting the claim.
+- **The per-actor `ease()` override must never be read back off the actor.**
+  `_shouldAnimateActor` replaces `actor.ease` and hands it back when the call it catches
+  is a real window animation. A resize can consume that call first (issue 335), leaving
+  the override installed — so the next takeover has to reuse the shell original stored on
+  the actor (`actor._bmwEaseOriginal`), not read `actor.ease`: reading it captures the
+  previous closure, and every subsequent animation grows a chain that retains an effect
+  and its profile settings, leaves a stale closure able to fire on animations the fork
+  chose to delegate, and survives `disable()` (where it throws through mutter's own
+  destroy path). `_doDisable()` walks `global.get_window_actors()` and takes back any
+  still-pending override.
+- **`disable()` has to release data, not only patches.** Clearing `_ALL_EFFECTS` is not
+  enough: each profile caches a filtered copy of that same list plus its own
+  `Gio.Settings`, so 26 effect objects, their shader pools and decoded textures stay
+  reachable through `_profiles`. `_resources` (a 2.5 MB mapping), the two power D-Bus
+  proxies and `WindowPicker` need the same treatment. Probe 04 asserts each of them is
+  gone after `disable()`.
+- **A failure latched on the animation path needs a retry that is *off* it.** The lazy
+  UPower / PowerProfiles proxies must not be rebuilt per window (each construction is a
+  synchronous D-Bus call), and must not be given up on for the login session either
+  (services start later). `extension.js` uses a bounded low-priority timeout whose source
+  `disable()` removes. Adding another "try once, then remember the failure" cache on a hot
+  path is the same bug class.
 - **GJS constraint**: no `fetch`/`URLSearchParams` inside the shell process. Use
   `Soup.Session` + `GLib.Bytes`.
+- **Record "already done" only after it actually worked.** The shader pre-warm used to add
+  the nick to `_warmedNicks` *before* building the shader and swallow the error, so one
+  driver rejection meant that effect never played again until re-login, with no journal
+  line — and the pool then built that shader on the animation path, the cost the pre-warm
+  exists to avoid. Same shape as an unverified latch: warn with the identifier, leave the
+  item retriable.
 - **`disable` + `enable` does NOT reimport modules.** A cached ESModule keeps its old
   code, so an edit to a `src/*.js` file only takes effect after a **log out / log in**.
   Never claim a reload activated an edit.
@@ -50,9 +78,11 @@ fork of Burn-My-Windows, used in place with no install step.
 ## Tests
 - **Three layers, always in order.** See `MAINTENANCE.md` §1 for what each one can prove.
   - **L0** `npm run check && npm test` — seconds, no display. `check` is `node --check`
-    over `extension.js`, `prefs.js` and all of `src/` (32 files); `test` runs
-    `test/*.test.mjs`. Four gates: build freshness, effect registration, sentinel drift,
-    patch symmetry. Run this before claiming anything about **any** change.
+    over `extension.js`, `prefs.js` and all of `src/` (32 files); `test` runs every
+    `test/*.test.mjs`. Gates: build freshness, effect registration, sentinel drift, patch
+    symmetry, proxy retry, shader warm-up, repository docs. Adding a file needs no other
+    edit — the glob and CI both pick it up. Run L0 before claiming anything about **any**
+    change.
   - **L1** `./test/headless/run.sh all` — real GNOME Shell process, fully sandboxed,
     minutes. The only layer that can prove private-API existence, shader/uniform
     resolution, the `_mapWindow@` take-over branch on a genuine SpiderMonkey stack, and
@@ -63,14 +93,25 @@ fork of Burn-My-Windows, used in place with no install step.
   outside GNOME Shell. `test/patch-symmetry.test.mjs` therefore slices the two patch
   regions out of the source and runs them against mock shell objects. The slices are
   located by the stable comments around them (they live in `test/lib/extension-slices.mjs`),
-  never by line numbers.
+  never by line numbers. Whole class methods are taken the same way by `sliceMethod()`
+  (brace-matched, skipping strings and comments) — that is how the proxy-retry and
+  shader-warmup gates reach `_getUpowerProxy()` and `_warmShaders()`.
 - **Expected counts are hardcoded and cross-checked on purpose.** `26` effects appear in
   `test/effect-registry.test.mjs`, `test/build-freshness.test.mjs` and probes 02/05; the
   probe derives its expectation from the GResource bundle, not from `_ALL_EFFECTS`,
   because comparing a list with itself proves nothing.
-- **Gates must be able to fail.** Prove it with mutations in a `cp -a` copy (never the
-  working tree): tamper a `.frag`, drop an effect from `_ALL_EFFECTS`, add a 9th
-  `this._orig…` capture without updating `PATCHES`, or un-guard one install.
+- **Gates must be able to fail.** Prove it with mutations: tamper a `.frag`, drop an
+  effect from `_ALL_EFFECTS`, add a 9th `this._orig…` capture without updating `PATCHES`,
+  or un-guard one install. Prefer a `cp -a` copy; if you mutate the working tree instead,
+  keep a byte-exact `/tmp` backup, restore after every mutation and prove the tree is
+  clean again with `git diff --stat` — a half-restored mutation is worse than no mutation,
+  because the next green run then means nothing.
+- **Prefer a boundary-free invariant over a hand-bumped count.** The sentinel gate used to
+  assert "exactly 5 `console.warn` sites"; the first legitimate new log line turned that
+  into a choice between deleting a guard and breaking a build. It now asserts that *every*
+  warning carries the `[burn-my-windows@local]` prefix, with a floor that only fires if the
+  probes themselves were removed. Keep the same shape for new gates: assert the property
+  that matters, not how many times you saw it.
 - **`disable` + `enable` does not reimport modules**, so no script can make a source edit
   live *in the running desktop*. `scripts/reload.sh` runs `make`, cycles the extension,
   waits for `State: ACTIVE`, tails the log, and warns when `extension.js` or `src/*.js`
@@ -126,6 +167,17 @@ fork of Burn-My-Windows, used in place with no install step.
 - `README.md` and `README.zh-CN.md` are a **two-file bilingual pair** — edit both.
 - Commit code first, docs in a separate commit. Commit messages use **Chinese subjects
   with English conventional-commit prefixes** (`fix:` / `perf:` / `docs:` / `chore:`).
+- Phase evidence (`PROFILE` / `AUDIT` / `PLAN` / `VERIFY` / `STATE`) lives in `reports/`,
+  which is **gitignored and local-only**: the point is that raw journal lines, window
+  titles and resolved user paths can be written down without ever reaching the public
+  remote. `test/repo.test.mjs` guards both directions (the ignore rule exists, and nothing
+  under `reports/` is tracked). Start a new session by reading `reports/STATE.md`.
+- Nothing committed may depend on `reports/` contents: it is not in a clone, so a
+  committed sentence citing it would be unverifiable for everyone else. Aggregate numbers
+  in committed docs still come from commands, per § Recording conventions.
+- Work happens in four phases — audit, plan, implement, verify — one small change at a
+  time, each with its own commit and its own red-before-green provocation. Stop and report
+  at a phase boundary; do not carry an unconfirmed phase into the next one.
 
 ## Recording conventions
 - Behaviour changes land in `CHANGELOG.md` as `D-###` entries; ids are monotonic and **never
