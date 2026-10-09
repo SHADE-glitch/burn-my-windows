@@ -37,6 +37,12 @@ export class WindowPicker {
     const iFace = utils.getStringResource(
       '/interfaces/org.gnome.shell.extensions.burn-my-windows.xml');
     this._dbus = Gio.DBusExportedObject.wrapJSObject(iFace, this);
+
+    // The LookingGlass inspector and its two handler ids. One inspector is created per
+    // export cycle and reused by every pick; see PickWindow().
+    this._inspector = null;
+    this._targetSignalId = 0;
+    this._closedSignalId = 0;
   }
 
   // --------------------------------------------------------------------- D-Bus interface
@@ -51,32 +57,40 @@ export class WindowPicker {
     lookingGlass.open();
     lookingGlass.hide();
 
-    const inspector = new LookingGlass.Inspector(Main.createLookingGlass());
-    inspector.connect('target', (me, target, x, y) => {
-      // Remove border effect when window is picked.
-      target.get_effects()
-        .filter(e => e.toString().includes('lookingGlass_RedBorderEffect'))
-        .forEach(e => target.remove_effect(e));
+    // One inspector per enable cycle rather than one per click. Both handlers below are
+    // stateless apart from the signal they emit and nothing ever disconnected them, so
+    // pressing "Select app" N times used to leave N inspectors behind, every one of
+    // which answered the *next* pick. The ids are kept so unexport() can stop them.
+    if (!this._inspector) {
+      this._inspector = new LookingGlass.Inspector(Main.createLookingGlass());
 
-      if (target.toString().includes('MetaSurfaceActor')) {
-        target = target.get_parent();
-      }
+      this._targetSignalId = this._inspector.connect('target', (me, target, x, y) => {
+        // Remove border effect when window is picked.
+        target.get_effects()
+          .filter(e => e.toString().includes('lookingGlass_RedBorderEffect'))
+          .forEach(e => target.remove_effect(e));
 
-      if (target.toString().includes('ContainerActor')) {
-        target = target.get_parent();
-      }
+        if (target.toString().includes('MetaSurfaceActor')) {
+          target = target.get_parent();
+        }
 
-      let wmClass = 'window-not-found';
-      if (target.toString().includes('WindowActor') &&
-          target.meta_window.get_wm_class() != '') {
-        wmClass = target.meta_window.get_wm_class();
-      }
+        if (target.toString().includes('ContainerActor')) {
+          target = target.get_parent();
+        }
 
-      this._dbus.emit_signal('WindowPicked', new GLib.Variant('(s)', [wmClass]));
-    });
+        let wmClass = 'window-not-found';
+        if (target.toString().includes('WindowActor') &&
+            target.meta_window.get_wm_class() != '') {
+          wmClass = target.meta_window.get_wm_class();
+        }
 
-    // Close LookingGlass when we're done.
-    inspector.connect('closed', _ => lookingGlass.close());
+        this._dbus.emit_signal('WindowPicked', new GLib.Variant('(s)', [wmClass]));
+      });
+
+      // Close LookingGlass when we're done.
+      this._closedSignalId =
+        this._inspector.connect('closed', () => Main.createLookingGlass().close());
+    }
   }
 
   // -------------------------------------------------------------------- public interface
@@ -89,5 +103,16 @@ export class WindowPicker {
   // Call this to stop this D-Bus again.
   unexport() {
     this._dbus.unexport();
+
+    // Stop answering picks and drop the inspector. From here on nothing in this
+    // extension refers to it; whether the shell finalizes it on its own schedule is
+    // not something this fork depends on.
+    if (this._inspector) {
+      this._inspector.disconnect(this._targetSignalId);
+      this._inspector.disconnect(this._closedSignalId);
+      this._inspector = null;
+      this._targetSignalId = 0;
+      this._closedSignalId = 0;
+    }
   }
 };

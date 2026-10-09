@@ -29,6 +29,24 @@
 		H.chk('signalIdsExist', signalCountOne > 0 ? true :
 			`no per-profile handlers were registered at all (${signalCountOne}) -- the leak meter below is blind`);
 
+		// WindowPicker used to allocate a LookingGlass inspector on every pick and never
+		// disconnect the handlers: N clicks left N inspectors alive, each of which
+		// answered the *next* pick. Ask twice and require one inspector to come back.
+		try {
+			const picker = inst._windowPicker;
+			picker.PickWindow();
+			const firstInspector = picker._inspector;
+			picker.PickWindow();
+			H.chk('pickerReusesOneInspector',
+				firstInspector !== null && picker._inspector === firstInspector ? true :
+				`two PickWindow() calls did not share one inspector (first=${!!firstInspector}, ` +
+				`same=${picker._inspector === firstInspector})`);
+		} catch (e) {
+			// No automated coverage of the picking path is a known gap (MAINTENANCE §7);
+			// if LookingGlass cannot be instantiated headless, say so instead of passing.
+			H.skip('pickerReusesOneInspector', `LookingGlass unavailable in the sandbox: ${String(e).split('\n')[0]}`);
+		}
+
 		// A window actor which still carries the extension's *own* ease() override is
 		// residue the eight patch restores cannot reach: that override is installed per
 		// actor and is only handed back when it meets a real window animation, so one can
@@ -82,6 +100,23 @@
 			`_activeProfileSignalId is still ${inst._activeProfileSignalId}`);
 		H.chk('effectsListEmptied', inst._ALL_EFFECTS.length === 0 ? true :
 			`${inst._ALL_EFFECTS.length} effect objects kept across disable`);
+
+		// Emptying _ALL_EFFECTS is not the same as releasing the effects: each profile
+		// entry holds a filtered *copy* of that very list, so all 26 effect objects,
+		// their shader pools and their decoded textures stayed reachable through
+		// _profiles -- and _resources kept the 2.5 MB mapping alive even though the
+		// bundle was already unregistered.
+		H.chk('profileDataReleased', inst._profiles.length === 0 ? true :
+			`${inst._profiles.length} profile object(s) survived disable(), each holding a Gio.Settings and its effects`);
+		H.chk('resourcesReferenceDropped', inst._resources === null ? true :
+			'_resources still refers to the unregistered bundle');
+		H.chk('windowPickerReleased', inst._windowPicker === null ? true :
+			'the picker survived disable(), inspector and D-Bus wrapper included');
+		H.chk('proxiesReleased',
+			inst._upowerProxy === null && inst._powerProfilesProxy === null ? true :
+			'a live D-Bus proxy survived disable()');
+		H.chk('killEffectsSignalCleared', inst._killEffectsSignal === 0 ? true :
+			`_killEffectsSignal is still ${inst._killEffectsSignal} after the disconnect`);
 
 		// The gresource is registered by the extension, not the shell: reading it after
 		// disable must fail. If it does not, the bundle (2.5 MB, mapped) outlives the

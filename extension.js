@@ -564,6 +564,12 @@ export default class BurnMyWindows extends Extension {
     this._proxyRetryAttempts = 0;
     this._upowerProxyChecked = false;
     this._powerProfilesProxyChecked = false;
+    // Drop the proxy objects themselves, not just the latches. Whether a live
+    // Gio.DBusProxy also keeps bus subscriptions behind is measured in the U1
+    // experiment (reports/STATE.md); either way the extension does not own an answer
+    // while it is disabled, so it should not hold the object either.
+    this._upowerProxy = null;
+    this._powerProfilesProxy = null;
 
     // Disconnect profile settings signal connections.
     if (this._profileSignalIds) {
@@ -580,23 +586,38 @@ export default class BurnMyWindows extends Extension {
     // Free all effect resources.
     this._ALL_EFFECTS = [];
 
+    // Drop the profile objects as well. Each entry holds a Gio.Settings *and* a
+    // filtered copy of the effect list, so emptying _ALL_EFFECTS alone kept all 26
+    // effect objects, their shader pools and their decoded textures reachable for the
+    // whole disabled period. An empty array rather than null: every reader is
+    // enabled-path code, and this way a late one degrades to "no match" instead of
+    // throwing through the shell.
+    this._profiles = [];
+
     // The blocks below undo whatever _doEnable() managed to install. Each step is
     // guarded because _doDisable() may also be reached after a partially failed
     // _doEnable(), in which case most of these fields are still undefined.
     // Assigning undefined to the patched methods would break the shell.
 
-    // Unregister our resources.
+    // Unregister our resources. The reference has to go too: a registered-in-name-only
+    // Resource keeps its 2.5 MB mapping alive for the whole disabled period.
     if (this._resources) {
       Gio.resources_unregister(this._resources);
+      this._resources = null;
     }
 
-    // Disable the window-picking D-Bus API.
+    // Disable the window-picking D-Bus API and let the picker release what it holds
+    // (its LookingGlass inspector -- see WindowPicker.unexport()).
     if (this._windowPicker) {
       this._windowPicker.unexport();
+      this._windowPicker = null;
     }
 
     if (this._killEffectsSignal) {
       global.window_manager.disconnect(this._killEffectsSignal);
+      // Zeroed so a re-enable cannot leave the previous id behind, and so a partially
+      // failed enable does not make this disconnect run against a borrowed id.
+      this._killEffectsSignal = 0;
     }
 
     // Restore the original window-open and window-close animations.
