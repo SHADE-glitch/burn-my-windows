@@ -308,3 +308,17 @@ Change   把单条引用的解析抽成 `targetOfReference()`：粘连的文件�
 Evidence L0 `npm test` 58/58。变异在 `cp -a` 副本里做，工作树未受影响：把继承分支挪回显式名字之前 → 1 红（新单元判据）；把逗号放回粘连字符集 → 2 红（新单元判据 + 真实 `CHANGELOG.md:300` 那条）；每次还原后 `node --test test/docs-links.test.mjs` 回到 9/9
 Cost     收紧粘连让一种过去静默通过的歧义写法变成红，**改的是引用写法而不是门**：`§N` 必须紧挨它自己的文件名（`docs/maintenance/measurement.md` §12），不能被逗号隔开。嫌太严就回退本条，代价是"名字属于上一句"的引用重新变成不可判定
 Commit   00906e9
+
+### D-042 · 2026-10-09 · chore · v48
+Symptom  `docs/maintenance/measurement.md` §12 的"最近一次完整认证"停在 2026-10-07 的 89 checks，`enable()` 那行还写着 5 ms / 30 ms，总线那行写"第一次 4.4 ms（沙箱内 3299 µs）"—— 括号里的微秒与毫秒本来就不自洽（3299 µs 是 3.3 ms）。这些数字是抄来的，不是这一轮量出来的
+Change   把 `docs/maintenance/measurement.md` §12 换成 2026-10-09 那次认证的命令产出：7 探针 103 checks（01/02/03/04/05/06/07 = 13/10/27/25/5/20/3）、CRITICAL 0、零写入三哈希不变；`enable()` 6 ms / 35 ms；有电源约束的 `_chooseEffect()` 3191 / 89 / 29 µs；探针 07 begin/end 36/36 且 `outstanding` 1 → 0（原先写"首尾 outstanding 0"，现在把"收窄"这层判据说明白，因为判据是 `outstandingAtEnd <= outstandingAtStart`，不是相等）；全套耗时 3 分 24 秒，按 `$OUT` 产物时间戳跨度量得并注明量法
+Evidence L1 `./test/headless/run.sh all` 在提交 `95cb463` 的干净树上跑完，`RESULT: PASS`、退出码 0；逐探针计数取自 `$OUT/*.json` 的 `checks` 对象而不是终端回显（本轮第一次因为把输出接了 `tail -60` 而丢了前三道门，只能从产物回读）。工作树在运行期间零改动，运行结束后才开始编辑
+Cost     基线表里的绝对值只能在同一台机器上纵向比（判据见 `docs/maintenance/measurement.md` §8）。**本轮只换有出处的行**：没有重测的行留在原样，那不是它们错了，是它们还没被这一轮量过
+Commit   e817c55
+
+### D-043 · 2026-10-09 · guard · v48
+Symptom  C1–C6 在 `extension.js` 里增删了行，于是仓库里每一处 `extension.js:` 行号引用一起错位：文档表格、探针注释和一条 `H.rec` 文本里的行号现在指向无关代码，而它们读起来仍然像证据。`src/WindowPicker.js` 因 C3 的改动同样失效。没有任何门看得见这件事 —— 文档路由门只判链接与节号能否解析
+Change   机械重走每个锚点（脚本打印每条引用的目标行原文，逐条判定）：`src/Shader.js`、`src/utils.js`、`src/ShaderFactory.js`、`src/effects/Glide.js`、`src/migrate.js`、`prefs.js` 与各特效文件的引用本轮没有被改动过，核对为仍然正确；错位的是 `extension.js` 的四处（真位置 1006 / 1039 / 1105 / 1164 / 1264）、`src/WindowPicker.js`（真位置 56 / 65，另加 92 的 `closed` 处理器）和 `_preamble.js` 引的 `Shader.js:145`（读 `.width` / `.height` 的其实是 150 与 164）。**探针注释一律改成按符号定位**，行号只留在文档表格里；`docs/maintenance/shell-internal-api.md` §7 的 WindowPicker 行随之从"没有任何层覆盖"纠正为"半边覆盖"。AGENTS.md 收下这条规则与重走命令
+Evidence 改动全部落在注释与一条 `H.rec` 文本上：**探针 diff 里没有任何一行含 `H.chk` 或 `H.metric`**（对 `git diff -U0 test/headless/probes/` 的输出做正则检查，零命中），检查点一个没动，因此不为此重跑 L1。四个被改的探针各过 `node --check`；L0 `npm test` 58/58、`npm run check`、`npm run check:log` 全绿；剩余的 `extension.js:` 引用只有两条，`grep` 回读确认它们指向 1164 与 1264
+Cost     这条规则**没有门能守**：行号到符号的映射要靠人（或者一个本轮没写的解析器），判据就是那条 grep 加"打印目标行原文"的核对动作。写错的行号不会报错，只会伪装成证据 —— 这正是把它从注释里清出去的理由。回退本条不需要重跑任何测试，但注释会重新变成一次性用品
+Commit   ff84a86
