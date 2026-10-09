@@ -259,3 +259,10 @@ Change   原始 `ease()` 记在 `actor._bmwEaseOriginal` 上复用，不再读�
 Evidence L0 本轮重跑 `npm test`（patch-symmetry 新增 `a resize fallthrough keeps the override pending but does not grow a chain`、`a delegated animation is not retroactively burned by an old closure`、`disable() takes back an ease() override that is still pending`；三条分别用「改回读 `actor.ease`」「删掉 `return`」「不遍历 actor」注入缺陷验出红）
 Cost     这三条路径此前没有任何门走过（`else` 分支与 disable 之后的闭包都是）。`_easeFallthroughs` 计数是为回答"GNOME 50 / Wayland 上这条到底走不走"，量完可撤
 Commit   b174f69
+
+### D-035 · 2026-10-09 · fix · v48
+Symptom  首个动画若撞上 logind / UPower 的启动竞态，`_upowerProxyChecked = true` 已在尝试之前置位且失败不再重试：`_upowerProxy` 整段会话为 null，`powerMode` 恒为 2，约束为"仅电池"的 profile 静默永不匹配，只有重新登录能恢复
+Change   构造拆成 `_tryUpowerProxy()` / `_tryPowerProfilesProxy()`；失败安排 30 s、最多三次的低优先级重试，且只在扩展仍启用时构造；动画热路径在失败之后不再有任何同步总线调用（重试调用幂等）；`_doDisable()` 取消定时器并清掉尝试锁，使 re-enable 能自己重头尝试
+Evidence L0 本轮重跑 `npm test`（`test/proxy-retry.test.mjs` 6 条：切出 5 个方法跑在 mock Gio / GLib 上，未修代码 / 不安排重试 / 去掉上界 / 删掉取消 / 热路径重建 / 去掉 `_settings` 守卫 六种注入各自验出红）；L1 探针 04 与 06 重跑 17 + 20 checks 全 PASS，CRITICAL 0
+Cost     缺席服务（台式机）上多至三次低优先级构造；90 s 窗口后放弃。测试用 `sliceMethod()` 按花括号配对切方法体，跳过字符串与注释 —— 这条工具顺带服务于后续门
+Commit   b38a1d0
