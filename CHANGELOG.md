@@ -322,3 +322,17 @@ Change   机械重走每个锚点（脚本打印每条引用的目标行原文�
 Evidence 改动全部落在注释与一条 `H.rec` 文本上：**探针 diff 里没有任何一行含 `H.chk` 或 `H.metric`**（对 `git diff -U0 test/headless/probes/` 的输出做正则检查，零命中），检查点一个没动，因此不为此重跑 L1。四个被改的探针各过 `node --check`；L0 `npm test` 58/58、`npm run check`、`npm run check:log` 全绿；剩余的 `extension.js:` 引用只有两条，`grep` 回读确认它们指向 1164 与 1264
 Cost     这条规则**没有门能守**：行号到符号的映射要靠人（或者一个本轮没写的解析器），判据就是那条 grep 加"打印目标行原文"的核对动作。写错的行号不会报错，只会伪装成证据 —— 这正是把它从注释里清出去的理由。回退本条不需要重跑任何测试，但注释会重新变成一次性用品
 Commit   ff84a86
+
+### D-044 · 2026-10-09 · guard · v48
+Symptom  用户手册开始按编号引用私有 API 清单与回滚配方，但文档路由门对覆盖范围只有一条整体要求（"至少 20 条节号引用"）。README 被 walk 跳过时它照样绿，于是这两处新引用处于无人看管状态
+Change   在节号解析那条门里加正向存在断言：README.md 与 README.zh-CN.md 必须在 markdown walk 里，且各自至少有一条节号引用被解析过
+Evidence `npm test` 58/58。两条断言都是"必须存在"的正向形式，所以 walk 一旦退化（目录被排除、正则失配）就变红，而不是安静地少扫一个文件。README 里现在被扫到的引用是 [`docs/maintenance/shell-internal-api.md`](docs/maintenance/shell-internal-api.md) §5 与 [MAINTENANCE.md](MAINTENANCE.md) §9
+Cost     这是**覆盖范围**的断言，不是内容正确的断言：它保证 README 被扫，不保证手册写的界面语义与 GNOME 一致。后者本轮是靠逐条回读代码得到的，见 D-045
+Commit   c8fb37f
+
+### D-045 · 2026-10-09 · chore · v48
+Symptom  README 的偏好设置一节只列控件名，没有说明配置档是**怎么被挑中**的。用户看得见六个下拉项，却看不出四条会直接改变观感的行为：应用名要整串相等、电源配置档在守护进程缺失时**不会**命中而电源模式会读成"外接电源"、预览只在窗口打开时播、测试模式把动画钉在 8000 ms。故障排查同样无处可查：改了 `.js` 没反应、动画完全不播、电源规则像是被无视、日志分两个进程
+Change   双语 README 补两件事。偏好设置一节写明挑选机制：约束全 AND，优先级算出来（高优先级开关 +100、写了应用 +10、其余每个非"任意"的约束 +1），命中后从**已启用**特效里随机取一个，没有命中或一个都没启用就走原生动画，且只有普通窗口与对话框会有特效；再逐项列出每个下拉在比什么。新增故障排查一节：模块缓存与注销重登、动画不播的四步排查、两条电源降级是写好的行为、两条 journald identifier 与三类告警各意味着什么、重置顺序是先复制 `~/.config/burn-my-windows` 再 `dconf reset -f`。偏好设置整节移到"使用"之后，中英章节数与顺序保持镜像
+Evidence 每条说法都回读实现：`_chooseEffect()` 的约束链与两处电源降级、`ProfileManager.getProfilePriority()` 的加分、`_setupEffect()` 的 `duration = testMode ? 8000 : …`、schema 里 26 个 `-enable-effect` 只有 `fire-enable-effect` 默认 `true`（脚本数过）、预览由**下一次**窗口关闭清除（探针 03 的既有断言）。dconf 路径与 profile 文件名在本机回读确认（`dconf dump /org/gnome/shell/extensions/burn-my-windows/` 有 `active-profile`，profile 是 `~/.config/burn-my-windows/profiles/<微秒>.conf`）。L0 `npm test` 58/58，双语章节数一致由 `test/repo.test.mjs` 判
+Cost     文档写的是**当前实现的语义**，其中"约束全 AND""优先级算法"来自上游设计，本 fork 只改了电源分支的降级判定。**没有承诺任何还没做的东西**：单档重置按钮与一键恢复默认都不存在，所以文中明说"目前没有"。若阶段 B 加了重置入口，这一节必须同步改写
+Commit   a6d792f
