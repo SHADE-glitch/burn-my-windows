@@ -436,8 +436,10 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
         };
 
         // clang-format off
-        addURIAction('homepage',      'https://github.com/Schneegans/Burn-My-Windows');
-        addURIAction('bugs',          'https://github.com/Schneegans/Burn-My-Windows/issues');
+        // Where to report a problem is this repository; who wrote the effects and where the
+        // donations and translation work go is upstream. The two are deliberately different.
+        addURIAction('homepage',      'https://github.com/SHADE-glitch/burn-my-windows');
+        addURIAction('bugs',          'https://github.com/SHADE-glitch/burn-my-windows/issues');
         addURIAction('new-effect',    'https://github.com/Schneegans/Burn-My-Windows/blob/main/docs/how-to-create-new-effects.md');
         addURIAction('translate',     'https://hosted.weblate.org/engage/burn-my-windows/');
         addURIAction('donate-kofi',   'https://ko-fi.com/schneegans');
@@ -481,10 +483,10 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
           dialog.set_application_name('Burn-My-Windows');
           dialog.set_version(`${this.metadata.version}`);
           dialog.set_developer_name('Simon Schneegans');
-          dialog.set_issue_url('https://github.com/Schneegans/Burn-My-Windows/issues');
+          dialog.set_issue_url('https://github.com/SHADE-glitch/burn-my-windows/issues');
           dialog.set_translator_credits([...translators].join('\n'));
           dialog.set_copyright('© 2023 Simon Schneegans');
-          dialog.set_website('https://github.com/Schneegans/Burn-My-Windows');
+          dialog.set_website('https://github.com/SHADE-glitch/burn-my-windows');
           dialog.set_license_type(Gtk.License.GPL_3_0);
 
           dialog.show();
