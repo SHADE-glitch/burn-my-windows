@@ -148,6 +148,12 @@
 		const bad = (k) => results.filter((r) => r[k] !== 1).map((r) => `${r.nick}${r.reason ? `(${r.reason})` : ''}`);
 		H.metric('windows', results.length);
 		H.metric('windowed', results.filter((r) => r.setup === 1).length);
+
+		// U2: how often does an ease() call which is NOT a window animation land on an
+		// actor this fork has claimed? That is the only route by which the ease override
+		// stays pending at all (issue 335), so this number decides how much that branch
+		// matters on GNOME 50 / Wayland. 26 real windows, each opened and closed once.
+		H.metric('easeFallthroughsNatural', inst._easeFallthroughs ?? 0);
 		H.rec('rows', results.map((r) => `${r.nick} setup=${r.setup} attach=${r.attach} paint=${r.paint} pin=${r.pin} frames=${r.frames ?? '-'} px=${r.pixels}${r.pxErr ? ` (${r.pxErr})` : ''} clean=${r.cleanup}`).join('\n'));
 
 		// A window that never mapped is a harness/client failure, not an effect failure;
