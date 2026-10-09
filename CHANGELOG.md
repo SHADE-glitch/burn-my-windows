@@ -385,3 +385,10 @@ Change   新增 `test/prefs-attribution.test.mjs`（5 条）。**期望地址不
 Evidence 三次注入各命中该守的一半（每个副本只放一种变异；第一版脚本想用 `cp` 恢复，撞上这里 `cp` 是交互别名、提示没答上就没恢复，导致后两次跑在上一次的污染状态上 —— 换成每次新建干净副本后结论才干净）：整串替换 → 只红"钱与翻译队列留在上游"与"归属编辑只在这四处"；只改 `set_copyright` / `set_developer_name` → 只红署名那条；只把 `set_website` 留回上游 → 红"报障去处"与"四处"两条。另有一条防自证的控制：fork 地址必须与上游地址不同，否则其余各条会"构造上成立"
 Cost     门读 README 的两行格式，改写 README 那一节时必须保住 `git clone …\.git` 与 `**Upstream:** [..](https://github.com/…)` 的形状，否则门红在"取不到地址"上而不是红在归属上。本轮刻意**没有**把 `changelog` 动作纳入断言：它仍打开上游的 changelog，是否改成本仓库 `CHANGELOG.md` 尚未拍板（见 MAINTENANCE.md 的「已知不修 / 待确认」），加门等于替这个决定做掉
 Commit   b64beb7
+
+### D-053 · 2026-10-09 · chore · v48
+Symptom  `docs/maintenance/measurement.md` §12 的"值"列里有三处把**单次采样**当基线存着：enable() 6 ms / 35 ms、`_chooseEffect()` 首帧 3.2 ms、begin_work / end_work "36 / 36"。它们的骗人方式不是数字错，而是让读者以为每个量只有一个点——下一次有人拿 35 去比实测 46，就会得出"退化了 31%"这种不存在的事实
+Change   本轮两次完整认证 + 三次补采（共 5 个 enable() 样本、5 个 constrained 首帧样本）后改成区间并标出采样次数与来源；begin_work 一行改述判据（进程级计数器，gnome-shell 自己也在计数，所以**起止差额没变宽**才是判据）；跨次稳定性一行改述成"五轮判定一致、数字不一致"。同一轮把 `docs/maintenance/measurement.md` §12 里 bundle 成员 74 → 70、AGENTS 的 L0 门清单补上四条偏好窗口门与图标门、README 双语里"恢复 74 个源文件"改成"那时是 74 个"
+Evidence 2026-10-09 23:07–23:10 完整认证 `RESULT: PASS`：7 探针 103 checks（13/10/27/25/5/20/3），`CRITICAL/JS ERROR lines across all sessions: 0`，零写入三哈希（dconf / profiles / 工作树）byte-identical，墙钟 3 分 24 秒（命令前后 `date` 量法，与原先的产物时间戳量法并列标注）。被认证的工作树是 `d7fdbf1`；其后差值可机械回读 —— `git diff --stat d7fdbf1..HEAD` 只含 `docs/maintenance/measurement.md`。L0 84/84
+Cost     **本轮收回一条我自己上一提交写下的归因**：`d7fdbf1` 里我写"46 ms 那次来自连跑，单跑三次都在 29–35"，暗示连跑更慢；这次认证同为连跑却打出 31 ms，该因果说法当场被自己的样本否掉，改写成"连跑与单跑没有稳定高低关系，46 是唯一高值但我说不出为什么"。同类一处更正："之后 28–89 µs" 被本轮的 127 µs 撑开。区间会变宽，不是一次写定的数
+Commit   2bbd164
