@@ -196,6 +196,8 @@ export default class BurnMyWindows extends Extension {
     this._upowerProxyChecked        = false;
     this._powerProfilesProxy        = null;
     this._powerProfilesProxyChecked = false;
+    this._proxyRetryId              = 0;
+    this._proxyRetryAttempts        = 0;
 
     // We will monkey-patch these methods. Let's store the original ones.
     // Sentinel for GNOME upgrades: all patch targets below are private Shell
@@ -551,6 +553,18 @@ export default class BurnMyWindows extends Extension {
       this._warmId = 0;
     }
 
+    // Cancel any pending proxy-retry timeout and clear the attempt flags. A source
+    // which outlived disable() would build a proxy against an already unregistered
+    // resource bundle, and a latch which survived it would deny a re-enable its own
+    // first attempt.
+    if (this._proxyRetryId) {
+      try { GLib.Source.remove(this._proxyRetryId); } catch (_e) {}
+      this._proxyRetryId = 0;
+    }
+    this._proxyRetryAttempts = 0;
+    this._upowerProxyChecked = false;
+    this._powerProfilesProxyChecked = false;
+
     // Disconnect profile settings signal connections.
     if (this._profileSignalIds) {
       this._profileSignalIds.forEach(id => {
@@ -813,56 +827,112 @@ export default class BurnMyWindows extends Extension {
     });
   }
 
-  // Lazily create the UPower D-Bus proxy to avoid blocking during startup.
-  // Both the success and the failure are cached: constructing the proxy performs
-  // a synchronous D-Bus call, so retrying it on every window animation would
-  // stall the compositor repeatedly while UPower is unavailable.
+  // Lazily create the UPower D-Bus proxy to avoid blocking during startup. A failed
+  // attempt is not final (see _scheduleProxyRetry()), but it is never retried from
+  // here either: constructing a proxy performs a synchronous D-Bus call and this runs
+  // on the window-open path.
   _getUpowerProxy() {
-    if (!this._upowerProxyChecked) {
+    if (!this._upowerProxy && !this._upowerProxyChecked) {
       this._upowerProxyChecked = true;
-      try {
-        const UPowerProxy = Gio.DBusProxy.makeProxyWrapper(
-          utils.getStringResource('/interfaces/org.freedesktop.UPower.xml'));
-        const proxy = new UPowerProxy(Gio.DBus.system, 'org.freedesktop.UPower',
-                                      '/org/freedesktop/UPower');
-        // Only keep the proxy if the service actually owns its bus name.
-        if (proxy.get_name_owner() != null) {
-          this._upowerProxy = proxy;
-        }
-      } catch (_e) {
-        // Service may be unavailable (masked, or still starting up); leave as null.
-      }
+      this._tryUpowerProxy();
+    }
+    // Either a failed first attempt or a later animation: in both cases the next
+    // attempt belongs on a timeout, not on the window-open path.
+    if (!this._upowerProxy) {
+      this._scheduleProxyRetry();
     }
     return this._upowerProxy;
   }
 
-  // Lazily create the PowerProfiles D-Bus proxy. As for UPower above, both the
-  // success and the failure are cached: constructing the proxy performs a
-  // synchronous D-Bus call (~1.4 ms measured), so retrying it on every window
-  // animation would stall the compositor repeatedly while the daemon is
-  // unavailable. Note that the construction itself *succeeds* even when nobody
-  // owns the bus name, so the name owner has to be checked explicitly. Without
-  // that check we would hand out a merely owner-less proxy, whose ActiveProfile
-  // reads back as null. _chooseEffect() would then fall through to its
-  // "performance" branch and let profiles which are constrained to a power
-  // profile match, even though the constraint could not be verified at all.
-  _getPowerProfilesProxy() {
-    if (!this._powerProfilesProxyChecked) {
-      this._powerProfilesProxyChecked = true;
-      try {
-        const PowerProfilesProxy = Gio.DBusProxy.makeProxyWrapper(
-          utils.getStringResource('/interfaces/net.hadess.PowerProfiles.xml'));
-        const proxy = new PowerProfilesProxy(
-          Gio.DBus.system, 'net.hadess.PowerProfiles', '/net/hadess/PowerProfiles');
-        // Only keep the proxy if the service actually owns its bus name.
-        if (proxy.get_name_owner() != null) {
-          this._powerProfilesProxy = proxy;
-        }
-      } catch (_e) {
-        // Service may be masked; leave as null.
+  // Reports whether the service is now reachable. The construction itself *succeeds*
+  // even when nobody owns the bus name, so the owner has to be checked explicitly: an
+  // owner-less proxy reads OnBattery as undefined, which _chooseEffect() would take as
+  // "plugged in" and then decide the power-mode constraint on an unverifiable reading.
+  _tryUpowerProxy() {
+    try {
+      const UPowerProxy = Gio.DBusProxy.makeProxyWrapper(
+        utils.getStringResource('/interfaces/org.freedesktop.UPower.xml'));
+      const proxy = new UPowerProxy(Gio.DBus.system, 'org.freedesktop.UPower',
+                                    '/org/freedesktop/UPower');
+      // Only keep the proxy if the service actually owns its bus name.
+      if (proxy.get_name_owner() != null) {
+        this._upowerProxy = proxy;
+        return true;
       }
+    } catch (_e) {
+      // Service may be unavailable (masked, or still starting up); leave as null.
+    }
+    return false;
+  }
+
+  // Lazily create the PowerProfiles D-Bus proxy. Same contract as UPower above: the
+  // first attempt happens on the animation path, failures are retried off it.
+  _getPowerProfilesProxy() {
+    if (!this._powerProfilesProxy && !this._powerProfilesProxyChecked) {
+      this._powerProfilesProxyChecked = true;
+      this._tryPowerProfilesProxy();
+    }
+    if (!this._powerProfilesProxy) {
+      this._scheduleProxyRetry();
     }
     return this._powerProfilesProxy;
+  }
+
+  // Reports whether the service is now reachable. As for UPower, the construction
+  // itself *succeeds* even when nobody owns the bus name, so the name owner has to be
+  // checked explicitly. Without that check we would hand out a merely owner-less
+  // proxy, whose ActiveProfile reads back as null. _chooseEffect() would then fall
+  // through to its "performance" branch and let profiles which are constrained to a
+  // power profile match, even though the constraint could not be verified at all.
+  _tryPowerProfilesProxy() {
+    try {
+      const PowerProfilesProxy = Gio.DBusProxy.makeProxyWrapper(
+        utils.getStringResource('/interfaces/net.hadess.PowerProfiles.xml'));
+      const proxy = new PowerProfilesProxy(
+        Gio.DBus.system, 'net.hadess.PowerProfiles', '/net/hadess/PowerProfiles');
+      // Only keep the proxy if the service actually owns its bus name.
+      if (proxy.get_name_owner() != null) {
+        this._powerProfilesProxy = proxy;
+        return true;
+      }
+    } catch (_e) {
+      // Service may be masked; leave as null.
+    }
+    return false;
+  }
+
+  // Retry the two lazy proxy constructions away from the window-animation path.
+  // The case this covers is a session whose very first window is mapped while
+  // logind/UPower is still starting: giving up on that attempt used to last the whole
+  // login session, and a profile constrained to "on battery" then silently never
+  // matched again. Bounded, because a masked service stays masked -- and each attempt
+  // is one synchronous D-Bus call (~1.4 ms measured), which is why it goes on a
+  // low-priority timeout instead of being retried per animation.
+  _scheduleProxyRetry() {
+    if (this._proxyRetryId !== 0 || this._proxyRetryAttempts >= 3) {
+      return;
+    }
+    this._proxyRetryId = GLib.timeout_add_seconds(GLib.PRIORITY_LOW, 30, () => {
+      this._proxyRetryId = 0;
+      // disable() removed this source; and even if it fired first, the resource bundle
+      // is gone by then, so building a proxy would fail on its interface XML anyway.
+      if (this._settings === null) {
+        return GLib.SOURCE_REMOVE;
+      }
+      this._proxyRetryAttempts++;
+      if (!this._upowerProxy) {
+        this._upowerProxyChecked = true;
+        this._tryUpowerProxy();
+      }
+      if (!this._powerProfilesProxy) {
+        this._powerProfilesProxyChecked = true;
+        this._tryPowerProfilesProxy();
+      }
+      if (!this._upowerProxy || !this._powerProfilesProxy) {
+        this._scheduleProxyRetry();
+      }
+      return GLib.SOURCE_REMOVE;
+    });
   }
 
   // Lazily instantiate all 26 effect objects. Called on first window animation.

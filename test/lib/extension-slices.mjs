@@ -49,6 +49,48 @@ export function sliceBetween(source, startAnchor, endAnchor) {
   return source.slice(start, end);
 }
 
+// One whole class method, body included. Brace counting rather than a pair of comment
+// anchors: these methods are scattered through the class, and six more anchor comments
+// would be six more things to keep in sync. Strings and comments are skipped, because
+// a stray brace in prose would otherwise end the slice early.
+export function sliceMethod(source, name) {
+  const start = source.indexOf(`\n  ${name}(`);
+  assert.notEqual(start, -1, `${name}() is not a method of extension.js`);
+  const open = source.indexOf('{', source.indexOf(')', start));
+  assert.notEqual(open, -1, `${name}() has no body`);
+
+  let depth = 0;
+  let i = open;
+  let quote = null;
+  let lineComment = false;
+  let blockComment = false;
+  while (i < source.length) {
+    const c = source[i];
+    const next = source[i + 1];
+    if (lineComment) {
+      if (c === '\n') lineComment = false;
+    } else if (blockComment) {
+      if (c === '*' && next === '/') { blockComment = false; i++; }
+    } else if (quote) {
+      if (c === '\\') i++;
+      else if (c === quote) quote = null;
+    } else if (c === '/' && next === '/') {
+      lineComment = true; i++;
+    } else if (c === '/' && next === '*') {
+      blockComment = true; i++;
+    } else if (c === '"' || c === '\'' || c === '`') {
+      quote = c;
+    } else if (c === '{') {
+      depth++;
+    } else if (c === '}') {
+      depth--;
+      if (depth === 0) return source.slice(start + 1, i + 1);
+    }
+    i++;
+  }
+  assert.fail(`${name}() has unbalanced braces -- the slice would run past it`);
+}
+
 // enable() declares `const extensionThis = this` before the first patch, and every
 // replacement reaches its original through that alias, so a replay has to provide it.
 export function installSource() {
