@@ -794,6 +794,11 @@ export default class BurnMyWindows extends Extension {
     this._ensureEffects();
 
     const queue = [];
+    // Two different sets: `queued` stops the same nick being compiled twice by one run
+    // (several profiles can enable the same effect), while _warmedNicks records only the
+    // effects which actually built a shader. Marking the queue position as warm is what
+    // used to make a single failure permanent and silent.
+    const queued = new Set();
     (this._profiles || []).forEach(p => {
       // The enabled effects are already cached per profile by _loadProfiles(),
       // so the 26 enable-effect keys do not have to be read a second time here.
@@ -802,8 +807,8 @@ export default class BurnMyWindows extends Extension {
       // _ALL_EFFECTS construction order.
       (p.enabledEffects || []).forEach(e => {
         const nick = e.constructor.getNick();
-        if (!this._warmedNicks.has(nick)) {
-          this._warmedNicks.add(nick);
+        if (!this._warmedNicks.has(nick) && !queued.has(nick)) {
+          queued.add(nick);
           queue.push(e);
         }
       });
@@ -826,6 +831,7 @@ export default class BurnMyWindows extends Extension {
         return GLib.SOURCE_REMOVE;
       }
 
+      const nick = effect.constructor.getNick();
       try {
         // Creating the shader registers its GType and loads and concatenates
         // its GLSL source. Measured in a real GNOME 50 shell: 1110 us for an
@@ -836,8 +842,13 @@ export default class BurnMyWindows extends Extension {
         // Returning the shader to the factory makes it immediately reusable
         // for real animations either way.
         effect.shaderFactory.getShader().returnToFactory();
-      } catch (_e) {
-        // A single effect failing to compile must not break the rest.
+        this._warmedNicks.add(nick);
+      } catch (e) {
+        // A single effect failing to build its shader must not break the rest -- but
+        // it must not vanish without a trace either. Not marking it warm means the
+        // next profile reload tries again instead of leaving "that effect never
+        // plays" as the only observable symptom.
+        console.warn(`[burn-my-windows@local] shader warm-up failed for ${nick}: ${e}`);
       }
 
       if (queue.length == 0) {

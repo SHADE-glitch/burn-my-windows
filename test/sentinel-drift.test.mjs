@@ -119,8 +119,18 @@ test('the three probe families still hold what they hold today', () => {
 });
 
 test('the log prefix the runbook greps for is still there', () => {
-  assert.equal(warnSites().length, 5,
-    'expected 5 console.warn sites carrying the literal [burn-my-windows@local] prefix');
+  // Counting the warning sites would have to be hand-bumped on every legitimate new
+  // log line, which is how a count gate ends up being deleted instead of obeyed. What
+  // the runbook actually depends on is that no warn escapes the prefix: an
+  // unattributable journal line cannot be told apart from another extension's, and
+  // run.sh attributes CRITICAL to this fork by path for exactly that reason.
+  const allWarns = (SRC.match(/console\.warn\(/g) ?? []).length;
+  assert.ok(allWarns >= 5,
+    `only ${allWarns} console.warn sites left -- the sentinel tables alone warn four times, ` +
+    'so a lower count means a probe was deleted');
+  assert.equal(warnSites().length, allWarns,
+    `a console.warn is missing the literal [burn-my-windows@local] prefix ` +
+    `(${warnSites().length} of ${allWarns} carry it)`);
   assert.equal(sentinelWarnSites().length, 4,
     'expected 4 sentinel warnings of the form "expected ... to be ..."');
   assert.equal((SRC.match(/\[burn-my-windows@local\] expected/g) ?? []).length, 4,
