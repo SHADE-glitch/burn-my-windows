@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // © SHADE-glitch — shared source slicing for burn-my-windows@local tests.
 //
-// extension.js is GI-bound and cannot be imported outside GNOME Shell, so every
-// static gate reads it as text. The regions are located by the stable comments
-// around them, never by line numbers: a line-number anchor breaks on every
-// unrelated edit above it and silently stops testing what it claimed to test.
+// extension.js and prefs.js are both GI-bound and cannot be imported outside GNOME Shell (or
+// outside the preferences process), so every static gate reads them as text. The regions are
+// located by the stable comments around them, never by line numbers: a line-number anchor
+// breaks on every unrelated edit above it and silently stops testing what it claimed to test.
 
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -55,7 +55,9 @@ export function sliceBetween(source, startAnchor, endAnchor) {
 // a stray brace in prose would otherwise end the slice early.
 export function sliceMethod(source, name) {
   const start = source.indexOf(`\n  ${name}(`);
-  assert.notEqual(start, -1, `${name}() is not a method of extension.js`);
+  assert.notEqual(start, -1,
+    `${name}() is not a two-space-indented method of the source being sliced ` +
+    '(extension.js and prefs.js are both sliced here)');
   const open = source.indexOf('{', source.indexOf(')', start));
   assert.notEqual(open, -1, `${name}() has no body`);
 

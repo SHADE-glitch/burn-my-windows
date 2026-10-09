@@ -409,33 +409,7 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
 
       // Add the main menu to the title bar.
       {
-        // Add the menu button to the title bar.
-        const menu = this._builder.get_object('menu-button');
-
-        // Starting with GNOME Shell 42, we have to hack our way through the widget tree
-        // of the Adw.PreferencesWindow...
-        const header = this._findWidgetByType(window.get_content(), Adw.HeaderBar);
-        header.pack_start(menu);
-        header.set_title_widget(this._builder.get_object('profile-button'));
-
-        // GNOME Shell extensions are forced to use a AdwPreferencesWindow. This already
-        // includes a Gtk.ScrolledWindow as well as an Adw.Clamp. For the profile
-        // editing, we want to use an Adw.Flap which reveals itself from the top. This
-        // needs to be inserted in the widget hierarchy above the Adw.Clamp, else it
-        // would look ugly. Therefore, we fiddle around with the internal widgets...
-        const flap     = this._builder.get_object('profile-editor-flap');
-        const clamp    = this._findWidgetByType(window.get_content(), Adw.Clamp);
-        const viewport = clamp.get_parent();
-        viewport.get_parent().set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.NEVER);
-        viewport.set_child(flap);
-
-        const scrolledWindow = Gtk.ScrolledWindow.new();
-        scrolledWindow.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
-        scrolledWindow.set_propagate_natural_height(true);
-        scrolledWindow.set_vexpand(true);
-        scrolledWindow.set_child(clamp);
-
-        flap.set_content(scrolledWindow);
+        this._installWindowChrome(window);
 
         const addURIAction = (name, uri) => {
           const action = Gio.SimpleAction.new(name, null);
@@ -868,6 +842,56 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
   // is parsed and returned as a JavaScript object / array.
   _getJSONResource(path) {
     return JSON.parse(utils.getStringResource(path));
+  }
+
+  // Starting with GNOME Shell 42, we have to hack our way through the widget tree
+  // of the Adw.PreferencesWindow...
+  //
+  // GNOME Shell extensions are forced to use a AdwPreferencesWindow. This already
+  // includes a Gtk.ScrolledWindow as well as an Adw.Clamp. For the profile
+  // editing, we want to use an Adw.Flap which reveals itself from the top. This
+  // needs to be inserted in the widget hierarchy above the Adw.Clamp, else it
+  // would look ugly. Therefore, we fiddle around with the internal widgets...
+  _installWindowChrome(window) {
+    const content = window.get_content();
+
+    // Add the menu button to the title bar. The widget tree below AdwPreferencesWindow is
+    // not API, so each half is guarded separately: a missing header bar must not also cost
+    // the profile editor, and neither may throw -- this runs while the dialog is being
+    // built, and a throw here leaves the user with no way to reach the switch that turns
+    // this extension off.
+    const header = this._findWidgetByType(content, Adw.HeaderBar);
+    if (header) {
+      header.pack_start(this._builder.get_object('menu-button'));
+      header.set_title_widget(this._builder.get_object('profile-button'));
+    } else {
+      console.warn(`[burn-my-windows@local] expected the preferences window's title bar to be ` +
+        `an Adw.HeaderBar, got none -- the menu button and the profile switcher will not be ` +
+        `in the title bar.`);
+    }
+
+    const clamp    = this._findWidgetByType(content, Adw.Clamp);
+    const viewport = clamp ? clamp.get_parent() : null;
+    const scroller = viewport ? viewport.get_parent() : null;
+
+    if (!scroller) {
+      console.warn(`[burn-my-windows@local] expected the content clamp's parent chain to be a ` +
+        `scrolled viewport, got ${clamp ? 'a clamp without that chain' : 'no Adw.Clamp'} -- ` +
+        `the profile editor will not slide in from the top.`);
+      return;
+    }
+
+    const flap = this._builder.get_object('profile-editor-flap');
+    scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.NEVER);
+    viewport.set_child(flap);
+
+    const scrolledWindow = Gtk.ScrolledWindow.new();
+    scrolledWindow.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
+    scrolledWindow.set_propagate_natural_height(true);
+    scrolledWindow.set_vexpand(true);
+    scrolledWindow.set_child(clamp);
+
+    flap.set_content(scrolledWindow);
   }
 
   // This traverses the widget tree below the given parent recursively and returns the
