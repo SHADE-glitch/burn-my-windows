@@ -59,9 +59,12 @@ Open **GNOME Settings → Extensions → Burn My Windows → Settings**. Pick an
 
 ## 🧪 Testing
 
-Three layers, always run in order. The full playbook — what each layer can and cannot
-prove, the private-API inventory, the compatibility matrix and the rollback recipe — is
-in [MAINTENANCE.md](MAINTENANCE.md).
+Three layers, always run in order. The full playbook — what each layer can and cannot prove
+and the rollback recipe — is in [MAINTENANCE.md](MAINTENANCE.md), which now routes the three
+long-term assets to `docs/maintenance/`: the private-API inventory
+([shell-internal-api.md](docs/maintenance/shell-internal-api.md)), the compatibility matrix
+([compat-matrix.md](docs/maintenance/compat-matrix.md)) and the measurement baselines
+([measurement.md](docs/maintenance/measurement.md)).
 
 ```bash
 npm run check && npm test          # L0: static, seconds, no display needed

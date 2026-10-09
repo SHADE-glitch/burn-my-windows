@@ -135,7 +135,7 @@ test('the log prefix the runbook greps for is still there', () => {
     'expected 4 sentinel warnings of the form "expected ... to be ..."');
   assert.equal((SRC.match(/\[burn-my-windows@local\] expected/g) ?? []).length, 4,
     'the sentinel message wording changed -- every log assertion in Tiers 1-3 and ' +
-    'MAINTENANCE.md section 5 greps on it');
+    'docs/maintenance/shell-internal-api.md section 5 greps on it');
 });
 
 // The instance-field probe runs inside WindowPreview.prototype._init -- the most

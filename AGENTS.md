@@ -80,9 +80,9 @@ fork of Burn-My-Windows, used in place with no install step.
   - **L0** `npm run check && npm test` — seconds, no display. `check` is `node --check`
     over `extension.js`, `prefs.js` and all of `src/` (32 files); `test` runs every
     `test/*.test.mjs`. Gates: build freshness, effect registration, sentinel drift, patch
-    symmetry, proxy retry, shader warm-up, repository docs. Adding a file needs no other
-    edit — the glob and CI both pick it up. Run L0 before claiming anything about **any**
-    change.
+    symmetry, proxy retry, shader warm-up, repository docs, doc links and `§N` references.
+    Adding a file needs no other edit — the glob and CI both pick it up. Run L0 before
+    claiming anything about **any** change.
   - **L1** `./test/headless/run.sh all` — real GNOME Shell process, fully sandboxed,
     minutes. The only layer that can prove private-API existence, shader/uniform
     resolution, the `_mapWindow@` take-over branch on a genuine SpiderMonkey stack, and
@@ -165,6 +165,12 @@ fork of Burn-My-Windows, used in place with no install step.
 
 ## Docs & Commits
 - `README.md` and `README.zh-CN.md` are a **two-file bilingual pair** — edit both.
+- `MAINTENANCE.md` is a **router**. The three long-term assets live under `docs/maintenance/`:
+  `docs/maintenance/shell-internal-api.md` (§5/§7/§10), `docs/maintenance/compat-matrix.md` (§6) and
+  `docs/maintenance/measurement.md` (§8/§12, plus the probe 06/07 methodology split out of
+  `MAINTENANCE.md` §1). The numbers are the *original* ones and are **never renumbered** —
+  cross-references depend on them, and `test/docs-links.test.mjs` fails any `§N` that does not
+  resolve to a heading with content in the file it names.
 - Commit code first, docs in a separate commit. Commit messages use **Chinese subjects
   with English conventional-commit prefixes** (`fix:` / `perf:` / `docs:` / `chore:`).
 - Phase evidence (`PROFILE` / `AUDIT` / `PLAN` / `VERIFY` / `STATE`) lives in `reports/`,
@@ -189,10 +195,13 @@ fork of Burn-My-Windows, used in place with no install step.
   `guard`; withdraws earlier work → `revert`; cleanup with no obligation either way → `chore`.
   A commit that is two things becomes two entries citing one hash — done so for `f4cba97`
   (D-010 guard / D-011 perf / D-012 perf) and `038c903` (D-019 fix / D-020 guard).
-- `guard` is not a synonym for `fix` here: the sentinel list (§5) and the compatibility matrix (§6)
+- `guard` is not a synonym for `fix` here: the sentinel list
+  (`docs/maintenance/shell-internal-api.md` §5) and the compatibility matrix
+  (`docs/maintenance/compat-matrix.md` §6)
   are judged by *"can it be provoked once"*, not by *"does the suite pass"*.
 - An entry is an assertion **as of its commit**, not current state. Never re-verify an old entry;
-  never hand-copy an aggregate count — `npm run check:log`, `make` and the §12 baseline commands
+  never hand-copy an aggregate count — `npm run check:log`, `make` and the
+  `docs/maintenance/measurement.md` §12 baseline commands
   print them. Measured µs/ms figures inside entries are *that day's* measurements.
 - Known-but-not-fixed issues stay in `MAINTENANCE.md` §13; they have no commit, so no entry.
 - `Symptom` names the mechanism, never the session: no window titles, no application names from a

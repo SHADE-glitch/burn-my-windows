@@ -1,0 +1,105 @@
+# 观测判据与当前基线
+
+本页是 burn-my-windows@local 三张长期资产页之一，从 `MAINTENANCE.md` 拆出，收着原先的 §8
+（哪些观测能当判据，哪些不能）与 §12（当前基线），以及原先属于 `MAINTENANCE.md` §1 的
+"探针 06 / 07 这两道门为什么单独存在"方法学小节。`MAINTENANCE.md` 里只留路由行，正文只在
+这里维护。三块合起来管的是同一件事：**哪些数字可以当证据用、哪些只会伪装成证据，以及
+"现在的水平线"长什么样**。**动手之前先读 [MAINTENANCE.md](../../MAINTENANCE.md) §3（隔离 headless
+shell 的边界）与 [AGENTS.md](../../AGENTS.md)（给 agent 的硬规则）**：本页每个数字都出自沙箱里的
+探针，绝对值只能在同一台机器上纵向比，跨环境比一律无意义。
+
+---
+
+### 06 / 07 这两道门为什么单独存在
+
+它们针对的问题**不抛异常、不报警、不改行为**，只改变整台机器的运行质感：
+
+- 启动时在主线程上同步做 IO / D-Bus。本 fork 的历史里真发生过一次：代理在
+  `_doEnable()` 里同步构造，顶穿 GDM fallback greeter 的约 12 s 超时，把整个登录拖坏。
+  所以 06 直接断言"enable() 期间两个代理都没被构造"，把这类回归钉住。
+- 全局状态配平错位。`beginAnimation()` 调 `global.begin_work()` 与
+  `compositor.disable_unredirect()`，对应的 `end_work()` / `enable_unredirect()` **只**在
+  `endAnimation()` 里发生，而它由 timeline 的 `stopped` 信号驱动；timeline 又是
+  `set_actor(actor)` 绑在 **actor 时钟**上的——actor 不再被绘制就不推进。任何"动画没走完"
+  的路径都可能把工作计数永久留在错误状态，表现为不空闲、耗电、全屏掉帧，
+  而没人会把它联想到一个窗口特效插件。
+
+实测结论：**没有泄漏**。五条路径全部归还着色器（这是可归因的硬门禁，两轮实测均 5/5）；
+`_doDisable()` 确实不主动结束在飞的动画，但没有留下悬挂的工作计数。
+
+> **`begin_work` / `end_work` 的"会话相等"不是有效不变量，别用它当判据。**
+> 我第一次拿它报"34 起 / 34 止完全配平"，第二次同样的代码给出 34 / 35，扩展行为毫无变化。
+> 两个原因：插桩若装在 `enable()` 之后，启动期的一次 `begin_work` 会落在窗外而其
+> `end_work` 落在窗内（方向就是证据：真泄漏应当是 begins 追不上 ends）；更根本的是
+> `global.begin_work/end_work` 是**整个 shell 进程共享**的，gnome-shell 自己也在调用，
+> 因此这个计数器无法归因到本扩展，只能界定损害范围。
+> 07 现在断言的是：插桩在 `boot()` 之前（两轮实测 36 / 36，首尾 outstanding 均为 0）、
+> **本探针不得让未配平差额比开始时更宽**、同时在飞数不得无界增长、以及上面那条
+> 逐场景着色器归还。总数只作 metric 供同机纵向比较。
+
+> 一条被移除的假阳性值得记住：按场景切片计数曾报 `overview-close 12 起 / 13 止`，
+> 而会话总计是 34/34——一个动画可以合法地跨到下一个场景才结束。留着这种会误报的断言
+> 只会训练人去无视红灯。因此 07 断言的是与边界无关的量：逐场景要求"shader 必须归还"，
+> 全局要求"会话配平"，外加"同时在飞数不得无界增长"。
+
+---
+
+## 8. 哪些观测能当判据，哪些不能
+
+**能当判据**：`checks` 全绿、哨兵告警计数为 0、`already disposed` 计数为 0、
+disable 后 8 处补丁身份相等、`_profileSignalIds` 与 profile 数成比例、零写入三哈希不变、
+探针 05 每个特效的 `update-animation` 帧数 > 0、
+探针 07 的"本探针未让 `begin_work` 差额变宽"、
+探针 06 的 `enable()` 耗时是否越过预算线（60 ms / 250 ms）。
+
+**不能当判据**：
+
+- 沙箱里的任何耗时数字的**绝对值**。软件渲染（llvmpipe）与真实 GPU 不可比——同类测量在
+  本 workspace 曾把一次填充从桌面 ~757 ms 量成沙箱 5355 ms。所以 06 的 `enable()` 数字
+  只能当**同机纵向**趋势用（这次 5 ms，下次变 40 ms 才是要警觉），不能当横向结论。
+- 探针 07 的 **begin/end 会话相等性**（含逐场景差值）。跨场景收尾会合法地让某个窗口内
+  ends > begins，而 gnome-shell 自身也调用这两个函数。可用的是"差额没有变宽"和
+  "逐场景着色器归还"。
+- 单个特效"帧数对不对"。`update-animation` 计数只证明合成器画了，不图画得对。
+- teardown 时的 GLib CRITICAL 总量：沙箱关闭会喷一堆与 fork 无关的 shell 内部
+  `dateMenu.js already disposed`。`run.sh` 因此只把**指向前扩展自身路径**的那部分算失败，
+  其余记录但不判。
+- `test-mode` 下的像素可复现性：`fire`、`aura-glow`、`mushroom`、`team-rocket` 的 `_uSeed`
+  用的是**未受 `testMode` 保护的** `Math.random()`，这 4 个的帧不保证一致。
+- **探针自己制造的 CRITICAL**。`already disposed` 最容易的来源是探针在窗口被 mutter 收走
+  之后还去读那个 actor——GJS 的这条 CRITICAL **try/catch 拦不住**，于是 26 个特效就会喷
+  26 条，看起来像 fork 的收尾有 bug，实际是探针违反了 `docs/maintenance/shell-internal-api.md` §5
+  里给哨兵定的同一条纪律。
+  收尾是否发生，看**池子回到 +1** 和 `preview-effect` 已清空这些还活着的证据，别去读死对象。
+
+---
+
+## 12. 当前基线
+
+| 项 | 值 |
+| --- | --- |
+| 上游版本 | v48，基线提交 `16ab10a` |
+| fork 提交数 | 见 `git rev-list --count 16ab10a..HEAD`（不要手抄数字，用命令） |
+| 特效数 | 26 |
+| bundle 成员 | 74 = 清单 `<file>` 74 |
+| schema 键 | 主 7 / profile 163 |
+| 默认开启的特效 | 只有 `fire`（26 个 `<nick>-enable-effect` 里唯一 `true`） |
+| 预热效果 | 干净配置下 `warmedNicks = 1`（= fire）。要测 26 个全预热必须改沙箱 keyfile |
+| 补丁处数 | 8 装 / 8 复，两侧都有守卫 |
+| 兼容分支站点 | 8 |
+| 哨兵符号 | 18（11 函数 + 2 访问器 + 4 字段 + 1 数组检查） |
+| L0 | `npm test` 全绿（门数与用例数以命令输出为准，别抄）；`npm run check` 覆盖 extension.js / prefs.js / src 全部 js |
+| L1 | 探针与 checks 数量由 `run.sh` 打印；单探针独占一次 shell 启动，冷启动约 20 s，`run.sh all` 实测 3 分 22 秒（7 次冷启动 + 26 个真窗口，探针增删后这个时长要重测） |
+| 跨次稳定性 | 探针 07 连跑两次结果一致（3/3，36/36）；第一版曾因 34/34 与 34/35 之间抖动而暴露断言无效 |
+| 最近一次完整认证 | 2026-10-07 23:01，7 探针 89 checks 全 PASS，CRITICAL 0，零写入三哈希不变 |
+| enable() 主线程阻塞 | 5 ms（1 profile）/ 30 ms（20 profiles） |
+| begin_work / end_work | 插桩提前后两轮实测均 36 / 36、首尾 outstanding 0；五条异常收尾路径全部归还着色器（**相等不是判据，"差额未变宽"才是**） |
+| 动画路径总线 | 首个**非预览**动画会构造 UPower 代理（沙箱 135 µs），之后 `OnBattery` 读本地缓存：gjs 1.88 实测 50 次读共 634 µs（≈13 µs/次，代理 `flags==0` ⇒ GIO 自持 PropertiesChanged 订阅）。有电源约束时第一次 4.4 ms（沙箱内 3299 µs），之后 28–70 µs |
+| ease 覆写落空 | 探针 05 的 `easeFallthroughsNatural`：26 个真窗口各开合一次实测 **0** 次 —— D-034 那条分支在 GNOME 50 / Wayland 的普通窗口流量下走不到，属潜在正确性而非当前故障 |
+| L1 观测值 | 着色器 26 个 GType、两轮往返约 140 ms；探针 05 每特效 70–73 帧 |
+| 每 profile 的 settings handler | 8（`_profileSignalIds` 的长度就是泄漏计数） |
+| 已验证平台 | Ubuntu 26.04.1 / GNOME Shell 50.1 / gjs 1.88 / Wayland，2026-10-01 |
+
+> 运行期间**不要编辑工作树**：零写入证明比较的是开跑前后的 `git status --porcelain`，
+> 你在跑的同时改文件（哪怕与测试无关）会让它如实报"工作树被改动"并使该次运行作废。
+> 同理，`git commit` 也算改动——先提交，再认证。

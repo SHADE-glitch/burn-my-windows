@@ -59,8 +59,11 @@ rm -rf ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 
 ## 🧪 测试
 
-三层，必须按顺序跑。完整手册——每层能证明什么、不能证明什么，私有 API 清单、兼容分支矩阵、
-回滚配方——都在 [MAINTENANCE.md](MAINTENANCE.md)。
+三层，必须按顺序跑。完整手册——每层能证明什么、不能证明什么，以及回滚配方——在
+[MAINTENANCE.md](MAINTENANCE.md)，它如今把三张长期资产路由到 `docs/maintenance/`：私有 API
+清单（[shell-internal-api.md](docs/maintenance/shell-internal-api.md)）、兼容分支矩阵
+（[compat-matrix.md](docs/maintenance/compat-matrix.md)）与观测判据／当前基线
+（[measurement.md](docs/maintenance/measurement.md)）。
 
 ```bash
 npm run check && npm test          # L0 静态：秒级，不需要显示器

@@ -8,6 +8,13 @@
 "改了什么、为什么改"看 [README.zh-CN.md](README.zh-CN.md) 的相对上游改动清单；
 给 agent 的硬规则看 [AGENTS.md](AGENTS.md)。三处不重复，避免漂移。
 
+需要长期留存的三块内容已经拆进 `docs/maintenance/`，本文件只做索引，节号一律沿用原编号不重排：
+
+- §5 / §7 / §10 → [docs/maintenance/shell-internal-api.md](docs/maintenance/shell-internal-api.md#5-哨兵清单18-个符号)
+- §6 → [docs/maintenance/compat-matrix.md](docs/maintenance/compat-matrix.md#6-兼容分支矩阵8-处以及-gnome-50-实际走哪条)
+- §8 / §12 → [docs/maintenance/measurement.md](docs/maintenance/measurement.md#8-哪些观测能当判据哪些不能)
+- 本文件 §1 拆出的 06 / 07 方法学 → [docs/maintenance/measurement.md](docs/maintenance/measurement.md)
+
 ---
 
 ## 0. 三十秒速查
@@ -18,7 +25,7 @@
 | 改了 `resources/` 或 `schemas/` | `make` **并且**把重生成的 `resources/burn-my-windows.gresource`、`schemas/gschemas.compiled` 一起提交，然后 `npm test` |
 | 改了 8 处 monkey-patch 之一 | `npm test`（`patch-symmetry` + `sentinel-drift` 两道门都在管它） |
 | 加了 / 删了一个特效 | `npm test`（登记点齐全性会红），再 `./test/headless/run.sh 02` |
-| 想知道 GNOME 升级后坏在哪 | `./test/headless/run.sh 01`，再看 §5 |
+| 想知道 GNOME 升级后坏在哪 | `./test/headless/run.sh 01`，再看 [`docs/maintenance/shell-internal-api.md`](docs/maintenance/shell-internal-api.md) §5 |
 | 想确认动画真的还播 | `./test/headless/run.sh 05`（真窗口）→ 再按 §1 的 L2 用眼睛确认 |
 | 怀疑有残留进程在干扰 | `./test/headless/down.sh` |
 | 桌面出问题了要退回 | §9，第一级不需要重新登录 |
@@ -50,6 +57,7 @@ npm test        # test/*.test.mjs
 | `test/proxy-retry.test.mjs` | 电源代理：失败后不在动画热路径上重建、重试有上界、`disable()` 取消定时器且允许 re-enable 重新尝试 |
 | `test/shader-warmup.test.mjs` | 着色器预热：只有成功才登记、一个失败不结束队列、失败留日志、跨 profile 去重、禁用后源自退 |
 | `test/repo.test.mjs` | 仓库自身的约定：README 双语对成对、无复选框、`reports/` 既被忽略也没被追踪 |
+| `test/docs-links.test.mjs` | 文档路由：`docs/maintenance/` 三页在、markdown 链接指向的文件在、`§N` 引用不悬空、拆出去的内容真的不在本文件里 |
 
 **为什么需要 build-freshness 这一门**：本仓库把编译产物提交进 git 且没有安装步骤，所以改了
 `.frag` / `.ui` / schema 而忘记 `make`，运行时会**继续用旧产物并且报绿**。没有工具会告诉你这件事。
@@ -87,38 +95,7 @@ node --test test/build-freshness.test.mjs | grep -c '^not ok'
 探针 05 里 26/26 窗口成功映射并播放，每轮 70–73 帧，`_progress` 恒为 0.5，收尾全部回池，
 指向前扩展自身路径的 CRITICAL 为 0 条。
 
-### 06 / 07 这两道门为什么单独存在
-
-它们针对的问题**不抛异常、不报警、不改行为**，只改变整台机器的运行质感：
-
-- 启动时在主线程上同步做 IO / D-Bus。本 fork 的历史里真发生过一次：代理在
-  `_doEnable()` 里同步构造，顶穿 GDM fallback greeter 的约 12 s 超时，把整个登录拖坏。
-  所以 06 直接断言"enable() 期间两个代理都没被构造"，把这类回归钉住。
-- 全局状态配平错位。`beginAnimation()` 调 `global.begin_work()` 与
-  `compositor.disable_unredirect()`，对应的 `end_work()` / `enable_unredirect()` **只**在
-  `endAnimation()` 里发生，而它由 timeline 的 `stopped` 信号驱动；timeline 又是
-  `set_actor(actor)` 绑在 **actor 时钟**上的——actor 不再被绘制就不推进。任何"动画没走完"
-  的路径都可能把工作计数永久留在错误状态，表现为不空闲、耗电、全屏掉帧，
-  而没人会把它联想到一个窗口特效插件。
-
-实测结论：**没有泄漏**。五条路径全部归还着色器（这是可归因的硬门禁，两轮实测均 5/5）；
-`_doDisable()` 确实不主动结束在飞的动画，但没有留下悬挂的工作计数。
-
-> **`begin_work` / `end_work` 的"会话相等"不是有效不变量，别用它当判据。**
-> 我第一次拿它报"34 起 / 34 止完全配平"，第二次同样的代码给出 34 / 35，扩展行为毫无变化。
-> 两个原因：插桩若装在 `enable()` 之后，启动期的一次 `begin_work` 会落在窗外而其
-> `end_work` 落在窗内（方向就是证据：真泄漏应当是 begins 追不上 ends）；更根本的是
-> `global.begin_work/end_work` 是**整个 shell 进程共享**的，gnome-shell 自己也在调用，
-> 因此这个计数器无法归因到本扩展，只能界定损害范围。
-> 07 现在断言的是：插桩在 `boot()` 之前（两轮实测 36 / 36，首尾 outstanding 均为 0）、
-> **本探针不得让未配平差额比开始时更宽**、同时在飞数不得无界增长、以及上面那条
-> 逐场景着色器归还。总数只作 metric 供同机纵向比较。
-
-> 一条被移除的假阳性值得记住：按场景切片计数曾报 `overview-close 12 起 / 13 止`，
-> 而会话总计是 34/34——一个动画可以合法地跨到下一个场景才结束。留着这种会误报的断言
-> 只会训练人去无视红灯。因此 07 断言的是与边界无关的量：逐场景要求"shader 必须归还"，
-> 全局要求"会话配平"，外加"同时在飞数不得无界增长"。
-
+### 06 / 07 这两道门为什么单独存在 → [docs/maintenance/measurement.md](docs/maintenance/measurement.md)
 
 **但探针 05 的像素对照层是 SKIP，不是 PASS**：`org.gnome.Shell.Screenshot.Screenshot`
 在沙箱里返回 `Gio.IOErrorEnum: Timeout was reached`（三个取样点 `fire` / `matrix` / `snap`
@@ -181,7 +158,7 @@ journalctl -f -o cat --identifier=/usr/bin/gnome-shell | grep -F '[burn-my-windo
 | `console.warn('...')` | ✅ 进日志，但是 WARNING 级别 |
 | `imports.gi.GLib.log(...)` | ❌ **该函数不存在**，调用即抛 |
 | `Main.global.compositor` | ❌ `Main.global` 是 undefined；直接用裸 `global` |
-| `imports.gi.Shell.Workspace` / `.WindowPreview` | ❌ GNOME 50 上 undefined，见 §5 末尾 |
+| `imports.gi.Shell.Workspace` / `.WindowPreview` | ❌ GNOME 50 上 undefined，见 [`docs/maintenance/shell-internal-api.md`](docs/maintenance/shell-internal-api.md) §5 末尾 |
 | `new Meta.Rectangle(0,0,800,600)` | ❌ 不可从 Eval 构造。fork 只读 `get_frame_rect().width`，普通对象即可 |
 | `mw.delete()` | ❌ 需要时间戳：`mw.delete(global.get_current_time())`，否则 GI 报 "At least 1 argument required"，窗口**没关掉**，接着被算成泄漏窗口 |
 | `GLib.file_remove(p)` | ❌ 不存在；用 `Gio.File.new_for_path(p).delete(null)` |
@@ -233,118 +210,19 @@ journalctl -o cat --since "-10 min" | grep -cE '\[burn-my-windows@local\] expect
 
 ---
 
-## 5. 哨兵清单：18 个符号
-
-fork 的全部生存能力都压在 GNOME Shell 的私有接口上。`_doEnable()` 里三张探针表**只告警、
-从不抛异常**，覆盖以下 18 项。升级后先看日志再说别的。
-
-**11 个函数**（`extension.js` 函数表）
-
-| 符号 | 谁在调 |
-| --- | --- |
-| `Main.wm._shouldAnimateActor` | 补丁本体：每一次窗口开合 |
-| `Main.wm._waitForOverviewToHide` | 补丁本体 |
-| `Main.wm._mapWindowDone` | 动画收尾 `:1088`（只调用，不 patch） |
-| `Main.wm._destroyWindowDone` | 动画收尾 `:1090`（只调用，不 patch） |
-| `Workspace.prototype._addWindowClone` | 概览克隆放大 |
-| `Workspace.prototype._windowRemoved` | 关闭路径 |
-| `Workspace.prototype._doRemoveWindow` | 关闭路径 |
-| `Workspace.prototype._lookupIndex` | `_shouldDestroy()` `:1107`（只调用，不 patch） |
-| `WindowPreview.prototype._init` | 挂 unmanaged 处理 |
-| `WindowPreview.prototype._deleteAll` | 概览 X 双击防重入 |
-| `WindowPreview.prototype._restack` | 叠序 |
-
-**2 个访问器**：`WindowPreview.prototype.overlayEnabled`（必须 get **和** set 都在——
-真正藏掉图标/标题/关闭按钮的是 setter）、`window_container`（只要 get）。
-`window_container` 是 GObject 属性，描述符挂在 `Shell.WindowPreview.prototype` 上而非
-我们手里的原型，**必须走原型链**才找得到；`typeof` 读它会调用 getter 并得到 `undefined`。
-
-**4 个实例字段 + 1 个类型检查**（在 patch 过的 `_init` 内部，一次性）：
-`WindowPreview._windowActor`、`._icon`、`._closeRequested`、`Workspace._windows`，
-外加 `Array.isArray(Workspace._windows)`。
-三条踩过的坑：`in` 是**唯一**可用的谓词（`_closeRequested` 出生即为 `false`，`typeof` 与
-真值判断都会误报缺失）；`WorkspaceLayout` 有个**同名**的 `Map`，所以必须验数组类型；
-这段探针只准用 `in` / `typeof` / `Array.isArray`，不得读 `this.` 上的属性、不得 `.connect(`——
-它跑在最危险的补丁上，`sentinel-drift` 对这条有专门断言。
-
-> 重要事实：`Workspace` / `WindowPreview` **不在 `Shell` GI 命名空间里**
-> （`imports.gi.Shell.Workspace` 在 GNOME 50 是 `undefined`）。它们是
-> `resource:///org/gnome/shell/ui/workspace.js` 与 `ui/windowPreview.js` 的 ESM 导出。
-> 任何想在真进程里检查原型的代码都必须 dynamic-import 这两个模块。
-
-规则：**新增一处私有 API 依赖，就同时加一行 §5 和一条探针表**，否则 `sentinel-drift` 会红。
+## 5. 哨兵清单：18 个符号 → [docs/maintenance/shell-internal-api.md](docs/maintenance/shell-internal-api.md)
 
 ---
 
-## 6. 兼容分支矩阵：8 处，以及 GNOME 50 实际走哪条
-
-探针 01 的 `compat-matrix` 会把这 8 行重新测一遍并与期望值比对；某一行翻转是**响的**，
-提示你去读那条你刚开始走的分支（原来的 `if` 可能已变成死支）。
-
-| 站点 | 探测的 API | GNOME 50 | 翻转的后果 |
-| --- | --- | --- | --- |
-| `src/Shader.js:122` | `Clutter.Timeline.prototype.set_actor` | 存在 | 时间线不再跟随 actor，动画走错时钟 |
-| `src/Shader.js:136` | `Meta.disable_unredirect_for_display` | **不存在** → 走 else：`global.compositor.disable_unredirect()` | 全屏动画期间撕裂 |
-| `src/Shader.js:193` | `Meta.enable_unredirect_for_display` | **不存在** → 走 else：`global.compositor.enable_unredirect()` | unredirect 永不恢复（注意：这段用 `disable` 的存在来决定是否调 `enable`） |
-| `src/Shader.js:154` | `meta_window.is_maximized` | 存在（49 加入）→ 走 if | `uIsFullscreen` 错 → shader padding 错 |
-| `src/Shader.js:219` | `Cogl.SnippetHook` | 存在 → Cogl 分支 | 所有 shader 构造失败 |
-| `src/utils.js:141` | `shellVersionIsAtLeast(48,'beta')` | true → `St.ImageContent.set_data` 带 Cogl context | 5 个带贴图特效（paint-brush / matrix / broken-glass / snap / trex）纹理构造失败。**纠正**：`getImageResource()` 只在特效侧调用，`prefs.js` 完全不用它，所以旧写法"偏好设置预览图坏"是找错了人 |
-| `src/utils.js:198` | `shellVersionIsAtLeast(47,'alpha')` | true → `Cogl.Color.from_string` | `parseColor` 抛 → 特效发黑 |
-| `src/ShaderFactory.js:79` | `GObject.Object.new` | true（GJS 里几乎恒真，`newv` 是死支） | shader 根本构造不出来 |
-
-版本门控本身在 `src/utils.js`：`shellVersionIs()` / `shellVersionIsAtLeast()`，
-喂 `Config.PACKAGE_VERSION`，比较器对任何更高的 major 都返回 true，**所以升到 GNOME 51
-不需要改它**。真正会隐形关掉一个特效的是**每特效**的门：`static getMinShellVersion()`
-（26 个里最高 `[40, 0]`），由 `prefs.js` 用来过滤列表项。
+## 6. 兼容分支矩阵：8 处，以及 GNOME 50 实际走哪条 → [docs/maintenance/compat-matrix.md](docs/maintenance/compat-matrix.md)
 
 ---
 
-## 7. 哨兵没覆盖的私有 API（升级后要手验的）
-
-探针表只覆盖 18 项，下面这些**不在表里**（本轮按授权未动 `extension.js`，所以也没扩表）。
-它们坏了不会有日志，只会行为异常：
-
-| 位置 | 符号 | 谁会先发现 |
-| --- | --- | --- |
-| `src/WindowPicker.js:50,54` | `Main.createLookingGlass()`、`new LookingGlass.Inspector` | **没有任何层覆盖**。只能手点"Select app"验证 |
-| `src/Shader.js:157` | `Meta.MaximizeFlags.BOTH` | L2（全屏/最大化的判断变错） |
-| `TRexAttack.js:77`、`SnapOfDisintegration.js:77,82`、`PaintBrush.js:68`、`BrokenGlass.js:103,108` | `Cogl.PipelineFilter.LINEAR`、`Cogl.PipelineWrapMode.REPEAT` | 探针 05（这 4 个特效带贴图） |
-| `src/utils.js:137,138,199` | `Cogl.PixelFormat.{RGB_888,RGBA_8888,RGBA_8888_PRE}` | 探针 02/05 |
-| `src/Shader.js:75` | 基类 `Shell.GLSLEffect` | 探针 02（构造即失败）间接发现 |
-| `src/Shader.js:142,198` | `global.begin_work()` / `end_work()` | **无人发现**：不平衡只会让电量/时钟统计悄悄错 |
-| `Doom.js:55,113`、`src/utils.js:142` | `global.stage.height` | 探针 05 的 `doom` |
-| `PixelWipe.js:51`、`Incinerate.js:61`、`BrokenGlass.js:76` | `global.get_pointer()` | 探针 05 只能证明"不抛"，沙箱里没有指针 |
-| `extension.js:1112` | `Workspace._windowActor`（运行期字段） | 探针 01 的实例字段臂 |
-| `src/effects/*.js` 5 处 | `this._<x>Texture.get_texture()` | 探针 05；另外这决定了**假 actor 走不通**真实 shell 的 `_shouldAnimateActor`（它要 `actor.get_texture()`） |
+## 7. 哨兵没覆盖的私有 API（升级后要手验的） → [docs/maintenance/shell-internal-api.md](docs/maintenance/shell-internal-api.md)
 
 ---
 
-## 8. 哪些观测能当判据，哪些不能
-
-**能当判据**：`checks` 全绿、哨兵告警计数为 0、`already disposed` 计数为 0、
-disable 后 8 处补丁身份相等、`_profileSignalIds` 与 profile 数成比例、零写入三哈希不变、
-探针 05 每个特效的 `update-animation` 帧数 > 0、
-探针 07 的"本探针未让 `begin_work` 差额变宽"、
-探针 06 的 `enable()` 耗时是否越过预算线（60 ms / 250 ms）。
-
-**不能当判据**：
-
-- 沙箱里的任何耗时数字的**绝对值**。软件渲染（llvmpipe）与真实 GPU 不可比——同类测量在
-  本 workspace 曾把一次填充从桌面 ~757 ms 量成沙箱 5355 ms。所以 06 的 `enable()` 数字
-  只能当**同机纵向**趋势用（这次 5 ms，下次变 40 ms 才是要警觉），不能当横向结论。
-- 探针 07 的 **begin/end 会话相等性**（含逐场景差值）。跨场景收尾会合法地让某个窗口内
-  ends > begins，而 gnome-shell 自身也调用这两个函数。可用的是"差额没有变宽"和
-  "逐场景着色器归还"。
-- 单个特效"帧数对不对"。`update-animation` 计数只证明合成器画了，不图画得对。
-- teardown 时的 GLib CRITICAL 总量：沙箱关闭会喷一堆与 fork 无关的 shell 内部
-  `dateMenu.js already disposed`。`run.sh` 因此只把**指向前扩展自身路径**的那部分算失败，
-  其余记录但不判。
-- `test-mode` 下的像素可复现性：`fire`、`aura-glow`、`mushroom`、`team-rocket` 的 `_uSeed`
-  用的是**未受 `testMode` 保护的** `Math.random()`，这 4 个的帧不保证一致。
-- **探针自己制造的 CRITICAL**。`already disposed` 最容易的来源是探针在窗口被 mutter 收走
-  之后还去读那个 actor——GJS 的这条 CRITICAL **try/catch 拦不住**，于是 26 个特效就会喷
-  26 条，看起来像 fork 的收尾有 bug，实际是探针违反了 §5 里给哨兵定的同一条纪律。
-  收尾是否发生，看**池子回到 +1** 和 `preview-effect` 已清空这些还活着的证据，别去读死对象。
+## 8. 哪些观测能当判据，哪些不能 → [docs/maintenance/measurement.md](docs/maintenance/measurement.md)
 
 ---
 
@@ -371,25 +249,7 @@ disable 后 8 处补丁身份相等、`_profileSignalIds` 与 profile 数成比�
 
 ---
 
-## 10. GNOME 大版本升级检查单
-
-按顺序做，别跳：
-
-1. 起桌面后先看日志：`journalctl -o cat -n 400 --identifier=/usr/bin/gnome-shell | grep -F 'expected '`。
-   **告警里点名的符号就是差异本身**，不用猜。
-2. 在新 shell 源码里核对 11 个函数名 + `_mapWindow` / `_destroyWindow` 两个帧名
-   （帧名被改是**静默**的：只有探针 03 会响）。本机 `/usr/share/gnome-shell/js` 不存在，
-   所以要从对应版本的 gnome-shell 源里读。
-3. `npm run check && npm test` → 先修 L0。加特效或加第 9 处补丁时，`26` 这个数字要同时改
-   `test/effect-registry.test.mjs`、`test/build-freshness.test.mjs`、探针 02/05 和本文件。
-4. `./test/headless/run.sh 01` → 哨兵与矩阵。
-5. `./test/headless/run.sh 02 03 04` → 着色器、派发、残留。
-6. 对照 §6：若某行翻了，**先把两条分支都读一遍**再动代码。
-7. `./test/headless/run.sh 05` → 真窗口逐个特效。
-8. L2 真会话人工项（§1）——只有这一层能确认观感。
-9. 同一会话内更新本文件 §5/§6/§7 与 README 改动清单（代码与文档分开提交）。
-
-优先级永远是 **稳定性 > 性能 > 观感**；绝不为了测试通过去改某个特效的外观。
+## 10. GNOME 大版本升级检查单 → [docs/maintenance/shell-internal-api.md](docs/maintenance/shell-internal-api.md)
 
 ---
 
@@ -406,35 +266,7 @@ GType 是否稳定、disable 后有没有残留、dispose 竞态会不会抛、�
 
 ---
 
-## 12. 当前基线
-
-| 项 | 值 |
-| --- | --- |
-| 上游版本 | v48，基线提交 `16ab10a` |
-| fork 提交数 | 见 `git rev-list --count 16ab10a..HEAD`（不要手抄数字，用命令） |
-| 特效数 | 26 |
-| bundle 成员 | 74 = 清单 `<file>` 74 |
-| schema 键 | 主 7 / profile 163 |
-| 默认开启的特效 | 只有 `fire`（26 个 `<nick>-enable-effect` 里唯一 `true`） |
-| 预热效果 | 干净配置下 `warmedNicks = 1`（= fire）。要测 26 个全预热必须改沙箱 keyfile |
-| 补丁处数 | 8 装 / 8 复，两侧都有守卫 |
-| 兼容分支站点 | 8 |
-| 哨兵符号 | 18（11 函数 + 2 访问器 + 4 字段 + 1 数组检查） |
-| L0 | `npm test` 全绿（门数与用例数以命令输出为准，别抄）；`npm run check` 覆盖 extension.js / prefs.js / src 全部 js |
-| L1 | 探针与 checks 数量由 `run.sh` 打印；单探针独占一次 shell 启动，冷启动约 20 s，`run.sh all` 实测 3 分 22 秒（7 次冷启动 + 26 个真窗口，探针增删后这个时长要重测） |
-| 跨次稳定性 | 探针 07 连跑两次结果一致（3/3，36/36）；第一版曾因 34/34 与 34/35 之间抖动而暴露断言无效 |
-| 最近一次完整认证 | 2026-10-07 23:01，7 探针 89 checks 全 PASS，CRITICAL 0，零写入三哈希不变 |
-| enable() 主线程阻塞 | 5 ms（1 profile）/ 30 ms（20 profiles） |
-| begin_work / end_work | 插桩提前后两轮实测均 36 / 36、首尾 outstanding 0；五条异常收尾路径全部归还着色器（**相等不是判据，"差额未变宽"才是**） |
-| 动画路径总线 | 首个**非预览**动画会构造 UPower 代理（沙箱 135 µs），之后 `OnBattery` 读本地缓存：gjs 1.88 实测 50 次读共 634 µs（≈13 µs/次，代理 `flags==0` ⇒ GIO 自持 PropertiesChanged 订阅）。有电源约束时第一次 4.4 ms（沙箱内 3299 µs），之后 28–70 µs |
-| ease 覆写落空 | 探针 05 的 `easeFallthroughsNatural`：26 个真窗口各开合一次实测 **0** 次 —— D-034 那条分支在 GNOME 50 / Wayland 的普通窗口流量下走不到，属潜在正确性而非当前故障 |
-| L1 观测值 | 着色器 26 个 GType、两轮往返约 140 ms；探针 05 每特效 70–73 帧 |
-| 每 profile 的 settings handler | 8（`_profileSignalIds` 的长度就是泄漏计数） |
-| 已验证平台 | Ubuntu 26.04.1 / GNOME Shell 50.1 / gjs 1.88 / Wayland，2026-10-01 |
-
-> 运行期间**不要编辑工作树**：零写入证明比较的是开跑前后的 `git status --porcelain`，
-> 你在跑的同时改文件（哪怕与测试无关）会让它如实报"工作树被改动"并使该次运行作废。
-> 同理，`git commit` 也算改动——先提交，再认证。
+## 12. 当前基线 → [docs/maintenance/measurement.md](docs/maintenance/measurement.md)
 
 ---
 
@@ -462,7 +294,8 @@ GType 是否稳定、disable 后有没有残留、dispose 竞态会不会抛、�
   正常桌面流程走不到（一次登录一次 enable），**但探针走得到**：这就是为什么 04 必须用
   `stateObj.disable()` / `stateObj.enable()` 而不是 `EM._callExtensionDisable()`（后者根本不会
   释放任何东西）。若将来有改动让扩展在运行中被重启，这条会变成真问题。
-- **`WindowPicker` 的 LookingGlass 路径只有半边覆盖**（§7 第一行）。探针 04 现在断言两次
+- **`WindowPicker` 的 LookingGlass 路径只有半边覆盖**（`docs/maintenance/shell-internal-api.md` §7
+  第一行）。探针 04 现在断言两次
   `PickWindow()` 共用一个 inspector、且 `disable()` 把它交还；但"真的点中一个窗口"仍然只能
   手点 —— 沙箱里没有指针输入，`target` 信号不会由 mutter 发出。升级后仍要手点一次 "Select app"。
 - `_chooseEffect()` 的第一个守卫是 `if (!actor.meta_window) return null`。给探针造的对象忘了
@@ -483,7 +316,7 @@ GType 是否稳定、disable 后有没有残留、dispose 竞态会不会抛、�
   测试模式对迁移过的 profile 照常生效。
 - `_ALL_EFFECTS` 在 `extension.js` 与 `prefs.js` 里顺序不同（Mushroom 一个垫底一个排第 14）。
   这是合法的，所以所有比较都按**集合**做。
-- `test-mode` 对 4 个特效不播种（见 §8），所以它们的帧不参与可复现性断言。
+- `test-mode` 对 4 个特效不播种（见 `docs/maintenance/measurement.md` §8），所以它们的帧不参与可复现性断言。
 - `src/Shader.js:215` 的 `match.index` 没有 null 检查：`.frag` 若不含 `void main(){…}` 就
   在构造期抛 TypeError。当前 26 个 `.frag` 全部由探针 02 证明可编译，所以它是**潜在**问题，
   影响是"新增一个写错的 `.frag` 时报错位置难读"，不参与本轮修复。
