@@ -96,6 +96,33 @@ test('every resource path used by the JS exists in the bundle', opts(), () => {
     `only ${literals.size} resource literals found -- the regex or the sources changed`);
 });
 
+// The two tests above check the bundle against the manifest; neither checks the manifest
+// against anything. An icon listed but named by nobody still compiles, still ships, and is
+// invisible -- deleting it from the .ui would not help, because upstream added the *manifest*
+// line for an action this fork never grew. So: every bundled icon must be named by source we
+// actually ship.
+test('every bundled icon is named by something we ship', opts(), () => {
+  const icons = manifestPaths().filter((p) => p.startsWith('img/scalable/actions/'));
+  assert.ok(icons.length > 0,
+    `no img/scalable/actions/ entry is left in ${MANIFEST} -- this check would pass on an ` +
+    'empty set and say nothing');
+
+  // Icon names reach a widget two ways: an `icon-name` string in a .ui page, or a literal
+  // passed to the JS. Both are shipped text, so both count as a use.
+  const text = [...allJsSources(),
+                ...manifestPaths().filter((p) => p.endsWith('.ui')).map(sourceBytes)]
+    .map((chunk) => (typeof chunk === 'string' ? chunk : chunk.toString('utf8')))
+    .join('\n');
+
+  const unnamed = icons
+    .map((p) => p.replace(/^img\/scalable\/actions\//, '').replace(/\.svg$/, ''))
+    .filter((name) => !text.includes(name))
+    .sort();
+  assert.deepEqual(unnamed, [],
+    `${unnamed.length} icon(s) are compiled into ${BUNDLE} but no shipped source names them: ` +
+    `${unnamed.join(', ')}. Wire it up, or drop it from ${MANIFEST} and the .svg, then run make.`);
+});
+
 test('the compiled schemas match their XML', () => {
   for (const [schemaId, file] of [[MAIN_SCHEMA, MAIN_SCHEMA_FILE],
                                   [PROFILE_SCHEMA, PROFILE_SCHEMA_FILE]]) {
