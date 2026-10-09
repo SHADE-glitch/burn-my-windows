@@ -450,6 +450,15 @@ describe('the maintenance runbook is still reachable after the split', () => {
         `no §N reference resolves to ${rel}, so nothing here proves that the split-out sections ` +
         'are reachable by number — citations must name the file they moved to');
     }
+    // The user-facing pair is scanned too, not just the maintainer docs: the troubleshooting
+    // section cites the sentinel list and the rollback ladder by number. If the walk ever
+    // stopped covering these files, those citations would go quietly unchecked.
+    for (const rel of ['README.md', 'README.zh-CN.md']) {
+      assert.ok(MD_FILES.includes(rel), `${rel} is not in the markdown walk, so nothing checks it`);
+      assert.ok(ALL_REFS.some((r) => r.from === rel),
+        `no §N citation inside ${rel} was scanned — the troubleshooting section has some, so this ` +
+        'file is being skipped and its pointers are unguarded');
+    }
     for (const ref of ALL_REFS) {
       if (ref.file === null) {
         assert.fail(
