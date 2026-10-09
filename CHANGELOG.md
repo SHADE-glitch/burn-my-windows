@@ -252,3 +252,10 @@ Change   钉 `?version=4.0`
 Evidence L0 本轮重跑 `npm test`（effect-registry：`both processes enumerate the same nicks`）
 Cost     钉版本让 GNOME 大版本变化在加载期就炸，而不是静默走错分支
 Commit   d9f22a7
+
+### D-034 · 2026-10-09 · fix · v48
+Symptom  issue 335 的 resize 分支只调用原始 `ease()` 而不摘掉覆写（上游刻意让它继续待命），于是下一次接管从 `actor.ease` 读到的"原始方法"其实是上一个闭包：每次接管多链一层闭包，各留住一个特效对象与其 profile 的 `Gio.Settings`；残留闭包还会在补丁主动让路的那次动画上凭空创建特效；`disable()` 之后它若再被触发，就在 `this._settings` 已为 null 时抛 TypeError，令 `_destroyWindowDone` 不再执行
+Change   原始 `ease()` 记在 `actor._bmwEaseOriginal` 上复用，不再读回自身；`_doDisable()` 遍历 window actors 回收待命覆写（只读自己的 expando，不碰已 dispose 的 GObject）；resize 分支透传 `ease()` 返回值并计数
+Evidence L0 本轮重跑 `npm test`（patch-symmetry 新增 `a resize fallthrough keeps the override pending but does not grow a chain`、`a delegated animation is not retroactively burned by an old closure`、`disable() takes back an ease() override that is still pending`；三条分别用「改回读 `actor.ease`」「删掉 `return`」「不遍历 actor」注入缺陷验出红）
+Cost     这三条路径此前没有任何门走过（`else` 分支与 disable 之后的闭包都是）。`_easeFallthroughs` 计数是为回答"GNOME 50 / Wayland 上这条到底走不走"，量完可撤
+Commit   b174f69

@@ -2,7 +2,9 @@
 /**
  * check-log.mjs — the recording-coverage check. No dependencies; bare
  * `node scripts/check-log.mjs` is the real gate (npm is only a name for it).
- * burn-my-windows@local: 30 code-touching commits since the v48 baseline 16ab10a.
+ * burn-my-windows@local: every commit which touched production code since the v48
+ * baseline 16ab10a must be cited here. The count is printed by this script's own
+ * output — copying it into a comment would only make a number that is already stale.
  *
  * Checks, all bounded by the window declared in CHANGELOG.md:
  *   0. the record is not empty (a check over an empty set is a fake green)
