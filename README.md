@@ -97,6 +97,18 @@ it plays on window **open** only — the request is cleared on the next window c
 animation to 8000 ms and fixes the random seeds so screenshots stay reproducible; it exists for the
 test harness, not for daily use, so turn it back off.
 
+**Undoing your own tuning.** Each effect row has a clear icon that resets **that effect's options** in
+the profile you are editing, and each individual option still has its own reset button in its row. One
+effect's button cannot reach another effect's keys, and neither button switches your profile. What is
+reset is whatever that effect declared for itself, so an option added later is covered without anyone
+remembering to register it.
+
+**What the rows explain.** Most option rows carry a one-line description. It is the text the setting
+itself already declares, read at runtime — nothing was written into the interface for the sake of this,
+which is also why it is **not translated**: it shows in English whatever your GNOME language is. Rows
+that already had a hand-written sentence keep theirs, and the effect header rows are deliberately left
+without one, because "Use the fire effect." under a row titled *Fire* explains nothing.
+
 ## 🛠️ Troubleshooting
 
 **I edited a `.js` file and nothing changed.** Disabling and re-enabling the extension does **not**
@@ -146,7 +158,8 @@ cp -a ~/.config/burn-my-windows ~/bmw-profiles-backup
 dconf reset -f /org/gnome/shell/extensions/burn-my-windows/   # global keys only
 ```
 
-Deleting a profile file deletes that profile for good, and there is no per-profile reset button yet.
+Deleting a profile file deletes that profile for good. There is no whole-profile reset — the per-effect
+button on each row is as far as it goes, and the commands above only clear the global keys.
 For the rollback ladder — from "just disable it" to "clean reinstall" — see
 [MAINTENANCE.md](MAINTENANCE.md) §9.
 
@@ -192,10 +205,10 @@ half; this section and CHANGELOG.md do not copy each other.
 - **Performance / startup:** synchronous enable with a deferred retry as fallback; deferred-enable delay reduced from 4000 ms to 1000 ms; enabled effects *and* the profile match constraints cached per profile instead of being re-read on every animation; `common.glsl` decoded once per shell process instead of once per shader; shader pre-warm reuses the cached effect list instead of reading the same 26 keys a second time; effect presets built once per widget realize; idle shader pre-warm; cached UPower and PowerProfiles proxies.
 - **Power handling:** tolerate UPower being unavailable instead of throwing; a constrained power profile no longer matches when the daemon is absent — the proxy is now rejected when nobody owns the bus name, which is what makes that rule actually hold.
 - **GNOME 50 compatibility:** the private-API sentinel now also covers the symbols that are only used at runtime (`_mapWindowDone`, `_destroyWindowDone`, `_lookupIndex`, the `overlayEnabled`/`window_container` accessors, and the `WindowPreview`/`Workspace` instance fields), using the only predicates that do not raise false warnings on a working shell; comments corrected where they no longer described GNOME 50 (`Meta.disable_unredirect_for_display` no longer exists, the effects are not built lazily, and the pre-warm does not compile GLSL — verified, `get_pipeline()` is still `null` afterwards).
-- **Preferences:** colour buttons are set through `set_rgba()` instead of the deprecated `rgba` property, which removes the warning that was logged for all 29 of them on every dialog open.
+- **Preferences:** colour buttons are set through `set_rgba()` instead of the deprecated `rgba` property, which removes the warning that was logged for all 29 of them on every dialog open; the widget-tree surgery that decorates the dialog now degrades with a logged warning instead of throwing while the dialog is still being built; each effect row resets its own options in one click; option rows fill in the description the setting itself already declares, read at runtime, which adds no new string to translate; and the menu's homepage / bug links plus the About dialog's website / issue links point at this repository while the author credit, the licence and the donation and translation links stay upstream.
 - **Migration:** async migration callback guarded against post-disable execution; profiles are no longer duplicated on a retried migration.
 - **Build:** restored 74 shader/UI/asset sources from the compiled bundle and added a `Makefile`.
-- **Cleanup:** removed dead code (`getUIDir()`, `Shader._time`, commented `mushroom-8bit-enable` key).
+- **Cleanup:** removed dead code (`getUIDir()`, `Shader._time`, commented `mushroom-8bit-enable` key) and four icons that nothing named, behind a standing check so the resource manifest cannot grow another one.
 
 ## 🤝 Contributing
 
