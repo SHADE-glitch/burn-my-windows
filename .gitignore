@@ -9,6 +9,12 @@
 # this; the rule only keeps one out of `git status` if it ever appears.
 node_modules/
 
+# Phase evidence for this maintenance fork: PROFILE / AUDIT / PLAN / VERIFY / STATE.
+# This repo is public and those files quote raw journal lines, window titles and
+# resolved temp paths, so they stay local-only. test/repo.test.mjs asserts this rule
+# exists and that nothing under reports/ is tracked even by force-add.
+reports/
+
 # NOTE: resources/burn-my-windows.gresource and schemas/gschemas.compiled are
 # compiled artifacts that this repo tracks ON PURPOSE (used in place, no install
 # step — see AGENTS.md § Build and the Makefile). Do not add rules for them.

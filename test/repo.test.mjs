@@ -14,6 +14,7 @@
 
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -27,7 +28,10 @@ import {ROOT} from './lib/extension-slices.mjs';
  */
 function listFiles() {
   const out = [];
-  const skip = new Set(['.git', 'node_modules', '__pycache__']);
+  // `reports/` is excluded because it is local-only phase evidence (see .gitignore):
+  // its prose is not a committed doc, and guarding it would make the suite depend on
+  // files a fresh clone does not have.
+  const skip = new Set(['.git', 'node_modules', '__pycache__', 'reports']);
   const walk = (rel) => {
     for (const e of fs.readdirSync(path.join(ROOT, rel), {withFileTypes: true})) {
       if (skip.has(e.name)) continue;
@@ -71,5 +75,20 @@ describe('documentation conventions hold', () => {
     // doc reads as unfinished work and never gets cleaned up.
     for (const f of FILES.filter((x) => x.endsWith('.md')))
       assert.ok(!/^\s*- \[[ xX]\]/m.test(read(f)), `${f} contains a task checkbox`);
+  });
+
+  it('phase evidence under reports/ is never committed', () => {
+    // reports/ holds PROFILE / AUDIT / PLAN / VERIFY / STATE, which quote raw journal
+    // lines, window titles and resolved temp paths -- exactly what must not reach a
+    // public remote. Both directions are asserted: the ignore rule has to exist, and
+    // nothing may be tracked under the directory even if a file was force-added past
+    // the rule.
+    const rules = read('.gitignore').split('\n').map((line) => line.trim());
+    assert.ok(rules.includes('reports/'),
+      '.gitignore no longer ignores reports/ — phase evidence would become committable');
+    const tracked = execFileSync('git', ['ls-files', '--', 'reports'],
+      {cwd: ROOT, encoding: 'utf8'}).trim();
+    assert.equal(tracked, '',
+      `reports/ must stay local-only, but git tracks files under it:\n${tracked}`);
   });
 });
