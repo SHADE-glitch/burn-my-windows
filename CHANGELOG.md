@@ -266,3 +266,10 @@ Change   构造拆成 `_tryUpowerProxy()` / `_tryPowerProfilesProxy()`；失败�
 Evidence L0 本轮重跑 `npm test`（`test/proxy-retry.test.mjs` 6 条：切出 5 个方法跑在 mock Gio / GLib 上，未修代码 / 不安排重试 / 去掉上界 / 删掉取消 / 热路径重建 / 去掉 `_settings` 守卫 六种注入各自验出红）；L1 探针 04 与 06 重跑 17 + 20 checks 全 PASS，CRITICAL 0
 Cost     缺席服务（台式机）上多至三次低优先级构造；90 s 窗口后放弃。测试用 `sliceMethod()` 按花括号配对切方法体，跳过字符串与注释 —— 这条工具顺带服务于后续门
 Commit   b38a1d0
+
+### D-036 · 2026-10-09 · fix · v48
+Symptom  `disable()` 只把 `_ALL_EFFECTS` 置空：每个 profile 条目都持有一份该列表的**过滤副本**加自己的 `Gio.Settings`，26 个特效对象连同 shader 池与已解码纹理在整段禁用期间仍可达；`_resources` 留着已注销 bundle 的 2.5 MB 映射，两个 D-Bus 代理与 `_windowPicker` 照旧挂着；`PickWindow()` 每次 D-Bus 调用新建一个 `LookingGlass.Inspector` 且两个 handler 永不解除 —— 点 N 次"选择窗口"就有 N 个 inspector 存活，每个都回答下一次拾取
+Change   `_doDisable()` 释放 `_profiles`（空数组而非 null，让迟到读取降级为"不匹配"而不是抛异常）、`_resources`、两个代理、`_windowPicker`，`_killEffectsSignal` 断开后置零；`WindowPicker` 改成一个导出周期一个 inspector，`unexport()` 断开两个 handler 并交还对象
+Evidence L1 探针 04 本轮重跑 25/25（原 19，新增五条释放断言 + 一条 inspector 复用；沙箱里 LookingGlass 可用，未走 skip）。注入缺陷各自验红：删掉全部释放语句 → 20/25，改回每次新建 inspector → 24/25
+Cost     `_windowPicker` 置 null 后 re-enable 会重建 picker 并重新 `export()` 同一条对象路径 —— 上游这条路径曾因为重复导出而抛 "An object is already exported"（探针 04 的注释记着），本轮 `reenabled` 仍然 PASS，说明重建顺序是对的
+Commit   cb06fa8
