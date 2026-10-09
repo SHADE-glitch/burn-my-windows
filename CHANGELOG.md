@@ -336,3 +336,24 @@ Change   双语 README 补两件事。偏好设置一节写明挑选机制：约
 Evidence 每条说法都回读实现：`_chooseEffect()` 的约束链与两处电源降级、`ProfileManager.getProfilePriority()` 的加分、`_setupEffect()` 的 `duration = testMode ? 8000 : …`、schema 里 26 个 `-enable-effect` 只有 `fire-enable-effect` 默认 `true`（脚本数过）、预览由**下一次**窗口关闭清除（探针 03 的既有断言）。dconf 路径与 profile 文件名在本机回读确认（`dconf dump /org/gnome/shell/extensions/burn-my-windows/` 有 `active-profile`，profile 是 `~/.config/burn-my-windows/profiles/<微秒>.conf`）。L0 `npm test` 58/58，双语章节数一致由 `test/repo.test.mjs` 判
 Cost     文档写的是**当前实现的语义**，其中"约束全 AND""优先级算法"来自上游设计，本 fork 只改了电源分支的降级判定。**没有承诺任何还没做的东西**：单档重置按钮与一键恢复默认都不存在，所以文中明说"目前没有"。若阶段 B 加了重置入口，这一节必须同步改写
 Commit   a6d792f
+
+### D-046 · 2026-10-09 · fix · v48
+Symptom  `fillPreferencesWindow()` 里那段"在偏好窗口内部动手"的控件树手术逐条解引用查找结果：`header.pack_start(...)`、`clamp.get_parent()`、`viewport.get_parent().set_policy(...)`。那棵树不是 API，libadwaita 插一层容器就返回 null —— 而抛异常发生在对话框构建期间，后果是用户打不开**唯一能关掉这个扩展的窗口**。它跑在 prefs 进程里，shell 侧的 L1 探针结构上看不见
+Change   先证明搬运不改行为，再谈守卫：原语句**逐字**搬进 `_installWindowChrome(window)`，标题栏与配置档编辑器两半各自判空、互不牵连，失败各写一条带 `[burn-my-windows@local]` 前缀的 warn 并继续装另一半
+Evidence 新增 `test/prefs-window-chrome.test.mjs`（5 条）：跑**真的** `_findWidgetByType` 递归遍历与一棵可迭代的 mock 控件树。第一条"健康树两半都装上"在逐字搬运之后就已经绿，那正是它存在的理由（证明重构没改行为）；其余三条各缺一样东西（无 HeaderBar / 无 Clamp / viewport 没有上层 scroller），要求只掉对应那一半、不抛、且另一半仍然装上；第五条要求 prefs.js 的每条 `console.warn` 都带前缀。先红后绿：搬运完、尚未加守卫时 4 条红（TypeError 与"0 条 warn"）
+Cost     守卫把"崩溃"换成"降级 + 一条 warn"，不是修复：控件树真的换了形状时装饰会丢、对话框仍然开得住，warn 说得出是哪一半丢的。重做手术需要人工按 warn 定位，本轮没有承诺自动适配
+Commit   cabdcd3
+
+### D-047 · 2026-10-09 · taste · v48
+Symptom  偏好窗口已有 119 个逐选项重置按钮（`grep -o 'id="reset-' resources/ui/adw/*.ui` 数得），缺的是"这个特效被我调乱了"的一次撤销：用户要记得自己动过哪几项，逐条点回去
+Change   每个特效行加一枚 `edit-clear-symbolic` 圆按钮，调用 `_resetEffect(nick)`。键集合**不**靠"按 `<nick>-` 前缀扫 schema"得到：真实 profile schema 里 `tv-` 同时是 6 个 `tv-glitch-*` 键的前缀（9 个 `tv-*` 键里只有 3 个属于 tv），前缀扫会把另一个特效的选项一起清掉。改成在 `_loadActiveProfile()` 接线时用 `_bindingEffect` 标记当前特效，由唯一的汇聚点收下键，存成 per-effect 的 `Set`（每次切换 profile 都会重新接线，一次点击不能重置两遍）。文案复用 `.mo` 里已有的 msgid "Reset to Default Value"（zh_Hans / de 目录实测存在）：Q3 不批准 gettext 工具链，新串进来就是 36 语言里的一处空白
+Evidence 新增 `test/prefs-reset-effect.test.mjs`（6 条，切出汇聚点与 `_resetEffect` 用 mock settings 跑）：键集合恰好等于该特效声明的、tv 与 tv-glitch 不互串、只写当前 profile（切换后不写旧 profile）、重复接线不重复重置、行上没有逐选项按钮的键仍被覆盖、以及一条源码形状门。先红后绿：在 /tmp 副本里换回提交前的 prefs.js → 红（`_resetEffect() is not a two-space-indented method of the source being sliced`）
+Cost     重置范围由"这个特效接线时经过哪些键"定义，不由声明表定义 —— 好处是新增选项自动被覆盖，代价是新绑定路径**必须**走到汇聚点，否则静默逃出重置集合；形状门守的就是这一条。README 里"目前没有单档重置"那句从此失真，收尾时必须改写（双语两处）
+Commit   8c43373
+
+### D-048 · 2026-10-09 · taste · v48
+Symptom  选项行只有标题，看不出这一项在调什么。手写解释句会把同一个意思在 36 份 `.mo` 里各欠一遍（仓库只有 `.mo`，没有 `.po` / `.pot`，Q3 又不批准 gettext 工具链）；而 GNOME 本来就为每个键存了一句话说明，运行时没人去取
+Change   `_describeRow()` 在绑定时从 `getProfileSettings().settings_schema` 反射该键的 `description` 填进 `subtitle`，新增 0 条可翻译串。三类行不动：`*-enable-effect`（那是特效自己的标题行，"Use the tv effect." 压在 "TV" 下面是噪声不是解释，26 个）、description 与 summary 逐字相同的（11 个，全是 mushroom / team-rocket 的占位）、已有手写 subtitle 的（`.ui` 里 8 条，8/8 带 `translatable="yes"`，已经过了 36 语言，而 schema 说明一句都没有）。profile schema 163 键 → 152 条可用说明、0 条为空，即 126 行获得解释句。`get_key()` 对未知键会抛，所以先 `has_key()`；取不到行则什么都不做。原先把它塞进 `_bindResetButton` 是错的：全套从绿退成 73/78，五条 `this._describeRow is not a function` —— 重置门用不着解释句。改成 `_finishBinding(settingsKey)` 汇聚点分别调用，六个 bind 入口的收尾都走它
+Evidence 用到的六个 GI 接口逐个对着本机 typelib 确认存在（`Adw.ActionRow` / `Adw.ExpanderRow` 的 `set_subtitle` / `get_subtitle`、`Gio.SettingsSchema.has_key` / `get_key`、`Gio.SettingsSchemaKey.get_summary` / `get_description`），没有凭记忆写。覆盖度用两种独立方法量过（gjs 反射 bundled `schemas/gschemas.compiled` + 直接解析 schema XML），结论一致；`settings_schema` 确认就是 `src/ProfileManager.js` 里 `lookup('…-profile')` 建出的那份，而不是主 schema 的 7 键。新增 `test/prefs-describe-row.test.mjs`（9 条）+ 两次变异：从汇聚点删掉 `_describeRow` 调用 → 9 条里精确 1 红；从 `_bind` 删掉转发 → 重置门里精确 1 红且失败的是新增的链断言，逐入口循环仍绿（那条断言存在的理由）。L0 全套 78/78
+Cost     schema XML 没有 `gettext-domain` 属性（`metadata.json` 里那份只作用于 UI 串），所以**解释句在任何界面语言下都是英文**。写代码这一侧无法让它变成中文，除非批准 gettext 工具链或把说明复制进 `.ui`（后者正是本条要避免的债）。本机 LANG 为 en_US.UTF-8，看不出违和；中文界面下会混排 —— 待你在真实会话目视判断可否接受，需要注销重登（prefs 进程同样吃 GJS 模块缓存，L1 探针覆盖不到 prefs.js）
+Commit   9f1a6d6
