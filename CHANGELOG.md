@@ -294,3 +294,17 @@ Change   改为按调用判断：`_anyEffectEnabled()` 读 `_loadProfiles()` 已
 Evidence L0 本轮重跑 `npm test` 49/49（`patch-symmetry` 新增 3 条：全关让路 / 有特效仍跳过（反向对照） / `_anyEffectEnabled` 的缓存语义；「恒不让路」「`some`→`every`」「恒返回 false」三种注入各掉 1 条）；L1 探针 01 13/13、03 **27**/27、04 25/25、07 3/3，CRITICAL 0，零写入三哈希不变
 Cost     **这是一次可感知的行为变化**：全关时窗口 map 时机回到原生（等概览退场）。若用户偏好原来的"永远不等"，回退本条即可，判据与守卫都在测试里
 Commit   16a67db
+
+### D-040 · 2026-10-09 · guard · v48
+Symptom  `MAINTENANCE.md` 一份 493 行的文件同时是 runbook（改之前跑什么、日志怎么读、怎么回滚）和三块长期资产（哨兵清单 / 兼容分支矩阵 / 观测判据与基线）。资产在 GNOME 大版本升级后被就地改写，"先跑什么"跟着一起漂。散文没有编译器：节号搬了家，`AGENTS.md`、本文件、探针注释里的 `§N` 引用照常存在、照常读起来像有依据，实际指向的只是一行路由
+Change   三块资产拆为 `docs/maintenance/` 三页，`MAINTENANCE.md` 降为路由：§0–§4 / §9 / §11 / §13 留正文，其余六节各留一行指针（§5 / §7 / §10 → `docs/maintenance/shell-internal-api.md`，§6 → `docs/maintenance/compat-matrix.md`，§8 / §12 → `docs/maintenance/measurement.md`），§1 的 06–07 方法学小节一并跟去 —— **节号沿用原编号不重排**。新增 `test/docs-links.test.mjs`（8 条）：markdown 相对链接与 `#锚点` 可达、`§N` 解析到它声称的文件且那里的标题不是路由行、移动过的节不得再按旧家（`MAINTENANCE.md` + `§N`）引用、每节恰好一行指针、移动内容在新文件**且**不在旧文件
+Evidence L0 `npm test` 57/57、`npm run check`、`npm run check:log` 全绿。搬运用逐行包含关系核对：新页与本文件共 51 行在旧文件里没有完全相同的形式，逐条确认为页首说明／路由行／`§N`→路径改写；旧文件有 9 行找不到孪生，同样逐条确认是这批改写，无一条是丢失的事实。变异在 `cp -a` 副本里做，工作树未受污染：整体移走 `docs/maintenance/` → 5 红（首条即"`compat-matrix.md` is missing"）；在 `AGENTS.md` 末尾追加一行旧家引用加一条断链 → 3 红（旧家引用、断链、两跳指针各掉一条）；每次还原后副本回到 57/57，`diff -q` 证明还原逐字节一致
+Cost     路由把一次升级要读的三张表换成三次跳转，换来的是"引用能解析"成为机器判据。**门只保证解析，不保证语义**：把 `docs/maintenance/measurement.md` §12 的实测值改成假数字，门仍然绿 —— 数值真伪归 `docs/maintenance/measurement.md` §8 的判据纪律，那一条不在这里。节号不重排是这套结构的长期负债：任何"顺手重排"会让 `AGENTS.md`、本文件与探针注释里的引用一起错位，而门只会报"解析不到"，不会报"这个号原本指的是别的"
+Commit   0ea8a29
+
+### D-041 · 2026-10-09 · guard · v48
+Symptom  文档路由门在自己新加的句子上误报：一句"§5 / §7 / §10 → `docs/maintenance/shell-internal-api.md`，§6 → `docs/maintenance/compat-matrix.md`"被判成后半句那一节不存在。原因是解析顺序与字符集两处：链式继承（"同一行的上一个引用"）被放在显式文件名之前，先抢走判据；`ATTACHED_BEFORE` 的粘连字符集里带着逗号与顿号，于是**前一句**的文件名能跨过逗号给下一个节号盖章 —— 后者更坏：一个属于上一句的路径可以给下一句的节号当依据，歧义写法被当成精确引用放行，而门存在的意义正是判据
+Change   把单条引用的解析抽成 `targetOfReference()`：粘连的文件名（写在号前或号后）优先于链式继承，逗号与顿号不再是粘连字符 —— 跨着逗号的名字不再给后面的节号盖章，那个节号按裸引用处理，于是落到路由并被"那是路由行"拒掉。新增第 9 条单元判据，用两个可判别 fixture 分别钉住这两条规则，并保留三条控制断言（纯连接词仍然继承、裸节号仍然回落路由、粘连的路径不是文件时必须失败并报出那个 token）
+Evidence L0 `npm test` 58/58。变异在 `cp -a` 副本里做，工作树未受影响：把继承分支挪回显式名字之前 → 1 红（新单元判据）；把逗号放回粘连字符集 → 2 红（新单元判据 + 真实 `CHANGELOG.md:300` 那条）；每次还原后 `node --test test/docs-links.test.mjs` 回到 9/9
+Cost     收紧粘连让一种过去静默通过的歧义写法变成红，**改的是引用写法而不是门**：`§N` 必须紧挨它自己的文件名（`docs/maintenance/measurement.md` §12），不能被逗号隔开。嫌太严就回退本条，代价是"名字属于上一句"的引用重新变成不可判定
+Commit   00906e9
