@@ -392,3 +392,10 @@ Change   本轮两次完整认证 + 三次补采（共 5 个 enable() 样本、5
 Evidence 2026-10-09 23:07–23:10 完整认证 `RESULT: PASS`：7 探针 103 checks（13/10/27/25/5/20/3），`CRITICAL/JS ERROR lines across all sessions: 0`，零写入三哈希（dconf / profiles / 工作树）byte-identical，墙钟 3 分 24 秒（命令前后 `date` 量法，与原先的产物时间戳量法并列标注）。被认证的工作树是 `d7fdbf1`；其后差值可机械回读 —— `git diff --stat d7fdbf1..HEAD` 只含 `docs/maintenance/measurement.md`。L0 84/84
 Cost     **本轮收回一条我自己上一提交写下的归因**：`d7fdbf1` 里我写"46 ms 那次来自连跑，单跑三次都在 29–35"，暗示连跑更慢；这次认证同为连跑却打出 31 ms，该因果说法当场被自己的样本否掉，改写成"连跑与单跑没有稳定高低关系，46 是唯一高值但我说不出为什么"。同类一处更正："之后 28–89 µs" 被本轮的 127 µs 撑开。区间会变宽，不是一次写定的数
 Commit   2bbd164
+
+### D-054 · 2026-10-09 · guard · v48
+Symptom  D-047 的承诺是"以后新增的选项不用谁去登记就自动被覆盖"，而这句话有个没被任何检查守着的**前提**：键是在 `_loadActiveProfile()` 的特效循环里、`_bindingEffect` 置位期间收的。某个特效若在别处绑自己的键（比如页面 realize 时），那把橡皮擦就永久漏掉那一键，而既有两条门仍然全绿——它们只断言六个 bind 入口都走到汇聚点，不看调用发生在哪个方法里
+Change   `test/prefs-reset-effect.test.mjs` 新增一条**扫调用点**的门：遍历 `src/effects/*.js` 每处 `dialog.bind*(`，按"两个空格缩进的类方法"把它归属到所在方法，要求全部落在 `bindPreferences()`（特效循环唯一调用的那个，即 `prefs.js` 里的 `effect.bindPreferences(this)`）。附一条防自证控制：扫到的文件数与调用数必须都 > 0
+Evidence 实测 26 个特效文件、bind 调用全部在 `bindPreferences()` 内，当前没有漏网的。另一半也查了：`src/effects/*.js` 与 `src/*.js` 没有任何一处绕过 helper 直接 `Gio.Settings.bind(...)`（Fire.js 走 `getProfileSettings().reset/set_*` 是它自己的预设功能，不是绑定）。两次注入（各在一个全新的 /tmp 副本里，做完即弃）：把 Apparition 一行 `bindAdjustment` 挪进 `getNick()` → 红且消息点名 "Apparition.js: getNick()"；把扫描正则改成一个不存在的调用名 → 红在"scanned 26 effect file(s) and found 0 bind call(s)"那条控制上。L0 全套 85/85
+Cost     归属靠"两个空格缩进的类方法"，这是**本仓库的书写约定**不是语言规则：将来有人把方法写成别的缩进，那一行会被归为 `null` 从而变红（红得响，不会静默放行）。这条门守"调用点落在哪个方法"，仍不守"标记的置位与复位是否成对"——那一半靠 `_bindingEffect = null` 紧跟 `bindPreferences` 这一处写法保证，本轮没有为它单独造门
+Commit   22ed443
