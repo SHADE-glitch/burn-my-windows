@@ -25,6 +25,38 @@
 		// ------------------------------------------------------------ _chooseEffect
 		// The preview branch is the only deterministic way to name a specific effect,
 		// and it silently no-ops unless active-profile resolves -- so assert that first.
+		// ---------------------------------------------------- the all-effects-off case
+		// Skipping the shell's overview wait is what lets a window animate while the
+		// overview is still sliding away. With nothing enabled there is nothing to
+		// animate, and skipping it anyway changes when windows map -- so the wait has to
+		// be handed back. The original is wrapped to observe the delegation, the same way
+		// the unrelated-caller case below wraps _origShouldAnimateActor.
+		const realWait = inst._origWaitForOverviewToHide;
+		let waitDelegated = 0;
+		inst._origWaitForOverviewToHide = function () {
+			waitDelegated++;
+			return Promise.resolve('waited');
+		};
+		const previousAnyEnabled = inst._anyEffectEnabled;
+
+		inst._anyEffectEnabled = () => false;
+		const offResult = await Main.wm._waitForOverviewToHide.call(Main.wm);
+		H.chk('overviewWaitHandedBackWhenAllEffectsOff',
+			offResult === 'waited' && waitDelegated === 1 ? true :
+			`all effects off gave ${JSON.stringify(offResult)} and delegated ${waitDelegated}x -- ` +
+			'the fork would map windows over a closing overview with nothing to animate');
+
+		// Negative control: the same call with an effect enabled must not delegate.
+		waitDelegated = 0;
+		inst._anyEffectEnabled = () => true;
+		const onResult = await Main.wm._waitForOverviewToHide.call(Main.wm);
+		H.chk('overviewWaitSkippedWhenAnEffectIsEnabled',
+			onResult !== 'waited' && waitDelegated === 0 ? true :
+			`with an effect enabled the wait still delegated (${waitDelegated}x) -- overview animations would not start`);
+
+		inst._anyEffectEnabled = previousAnyEnabled;
+		inst._origWaitForOverviewToHide = realWait;
+
 		const profile = inst._profiles[0];
 		H.chk('profileResolves', !!profile && !!profile.settings ? true :
 			`active profile is ${JSON.stringify(profile && Object.keys(profile))}`);

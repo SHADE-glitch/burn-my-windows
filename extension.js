@@ -411,6 +411,14 @@ export default class BurnMyWindows extends Extension {
     // undefined and the restore would be skipped.
     if (this._origWaitForOverviewToHide) {
       Main.wm._waitForOverviewToHide = async function() {
+        // Not waiting is only justified while there is something to animate: it lets
+        // windows map while the overview is still sliding away. Someone who turned
+        // every effect off has earned the shell's own behaviour back. Decided per call
+        // rather than per enable(), because the enabled set is edited from the
+        // preferences dialog while the extension stays enabled.
+        if (!extensionThis._anyEffectEnabled()) {
+          return extensionThis._origWaitForOverviewToHide.apply(this);
+        }
         return Promise.resolve();
       };
     }
@@ -776,6 +784,13 @@ export default class BurnMyWindows extends Extension {
       colorScheme:   p.settings.get_int('profile-color-scheme'),
       powerProfile:  p.settings.get_int('profile-power-profile')
     };
+  }
+
+  // Whether any profile would animate anything at all right now. Reads the per-profile
+  // enabledEffects cache which _loadProfiles() already maintains, so this is a scan of
+  // a handful of entries with no settings access at all.
+  _anyEffectEnabled() {
+    return (this._profiles || []).some(p => (p.enabledEffects || []).length > 0);
   }
 
   // Pre-compiles one shader per idle tick for each enabled effect which has not

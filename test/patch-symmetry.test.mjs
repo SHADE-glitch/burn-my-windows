@@ -13,7 +13,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {SRC, PATCHES, installSource, restoreSource} from './lib/extension-slices.mjs';
+import {SRC, PATCHES, installSource, restoreSource, sliceMethod} from './lib/extension-slices.mjs';
 
 const PATCH_COUNT = PATCHES.length;
 
@@ -94,6 +94,9 @@ function makeExt(overrides = {}) {
     _shouldDestroy: () => false,
     _chooseEffect: () => undefined,
     _setupEffect: () => {},
+    // One effect enabled is the state the overview patch was written for; the
+    // all-effects-off case is driven explicitly by its own test.
+    _anyEffectEnabled: () => true,
     _previewFieldsWarned: true,
   }, overrides);
 }
@@ -499,5 +502,60 @@ test('disable() takes back an ease() override that is still pending', () => {
     'disable() must not break on an actor that is already gone');
   assert.equal(actor.ease, originalEase,
     'disable() left the extension ease() override on a live window actor');
+});
+
+// ------------------------------------------------------------------ all effects off
+// Main.wm._waitForOverviewToHide is replaced so a window can be animated while the
+// overview is still sliding away. Skipping that wait changes when windows map, which is
+// only paid for if there is something to animate -- so an effect-free configuration has
+// to get the shell's own behaviour back, per call rather than per enable(): the enabled
+// set is edited from the preferences dialog while the extension stays enabled.
+
+test('the overview wait is handed back when nothing can animate', async () => {
+  const shell = makeShell();
+  const ext = makeExt({_anyEffectEnabled: () => false});
+  installInto(ext, shell);
+
+  let delegated = 0;
+  ext._origWaitForOverviewToHide = function upstreamWait() {
+    delegated++;
+    return 'waited';
+  };
+
+  assert.equal(await shell.wm._waitForOverviewToHide.call(shell.wm), 'waited',
+    'the fork skipped the shell wait with no effect enabled -- windows now map while the overview is still moving');
+  assert.equal(delegated, 1, 'the replacement did not reach the shell method');
+});
+
+test('an enabled effect still skips the overview wait', async () => {
+  // The negative control: without it, a replacement that always delegates would pass
+  // the case above, and window-open animations in the overview would be silently gone.
+  const shell = makeShell();
+  const ext = makeExt();
+  installInto(ext, shell);
+
+  let delegated = 0;
+  ext._origWaitForOverviewToHide = function upstreamWait() {
+    delegated++;
+    return 'waited';
+  };
+
+  assert.equal(await shell.wm._waitForOverviewToHide.call(shell.wm), undefined,
+    'the wait was not skipped while an effect is enabled');
+  assert.equal(delegated, 0, 'the shell wait ran anyway, so overview animations cannot start');
+});
+
+test('_anyEffectEnabled reads the profile cache and nothing else', () => {
+  const helper = new Function(`return {${sliceMethod(SRC, '_anyEffectEnabled')}};`)();
+
+  assert.equal(helper._anyEffectEnabled.call({_profiles: []}), false,
+    'an empty profile list reported something as enabled');
+  assert.equal(helper._anyEffectEnabled.call({_profiles: [{enabledEffects: []}]}), false,
+    'a profile with every effect off reported something as enabled');
+  assert.equal(helper._anyEffectEnabled.call({
+    _profiles: [{enabledEffects: []}, {enabledEffects: [{}, {}]}],
+  }), true, 'an enabled effect was missed');
+  assert.equal(helper._anyEffectEnabled.call({}), false,
+    'before _loadProfiles() has run, "nothing enabled" is the only safe answer');
 });
 
