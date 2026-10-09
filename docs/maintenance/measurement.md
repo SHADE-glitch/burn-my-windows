@@ -81,7 +81,7 @@ disable 后 8 处补丁身份相等、`_profileSignalIds` 与 profile 数成比�
 | 上游版本 | v48，基线提交 `16ab10a` |
 | fork 提交数 | 见 `git rev-list --count 16ab10a..HEAD`（不要手抄数字，用命令） |
 | 特效数 | 26 |
-| bundle 成员 | 74 = 清单 `<file>` 74 |
+| bundle 成员 | 70 = 清单 `<file>` 70（2026-10-09 删掉 4 个无人指名的图标后由 74 变 70；`img/scalable/actions/` 剩 5，逐个都有 shipped 文本指名，由 `test/build-freshness.test.mjs` 守着） |
 | schema 键 | 主 7 / profile 163 |
 | 默认开启的特效 | 只有 `fire`（26 个 `<nick>-enable-effect` 里唯一 `true`） |
 | 预热效果 | 干净配置下 `warmedNicks = 1`（= fire）。要测 26 个全预热必须改沙箱 keyfile |
@@ -92,9 +92,9 @@ disable 后 8 处补丁身份相等、`_profileSignalIds` 与 profile 数成比�
 | L1 | 探针与 checks 数量由 `run.sh` 打印；单探针独占一次 shell 启动，冷启动约 20 s，`run.sh all` 实测 3 分 24 秒（2026-10-09，按 `$OUT` 产物时间戳跨度；7 次冷启动 + 26 个真窗口，探针增删后这个时长要重测） |
 | 跨次稳定性 | 探针 07 已跑三轮（2026-10-07 两次、2026-10-09 一次）结果一致（3/3，36/36）；第一版曾因 34/34 与 34/35 之间抖动而暴露断言无效 |
 | 最近一次完整认证 | 2026-10-09 20:12，7 探针 103 checks 全 PASS（01/02/03/04/05/06/07 = 13/10/27/25/5/20/3），CRITICAL 0，零写入三哈希不变 |
-| enable() 主线程阻塞 | 6 ms（1 profile）/ 35 ms（20 profiles）（2026-10-09 探针 06） |
+| enable() 主线程阻塞 | 1 profile：4–5 ms；20 profiles：**29–46 ms**。2026-10-09 四次独立采样为 30 / 29 / 35 / 46 ms，其中 46 那次来自 `run.sh all` 连跑，单跑 `run.sh 06` 的三次都在 29–35。`extension.js` 与 `src/` 自基线认证那次提交起**逐字节未变**（`git diff --stat <baseline>..HEAD -- extension.js src/` 为空），所以这段差是机器状态而不是代码。**这一项以前记的是单次采样值（6 ms / 35 ms），那正是它能骗人的方式** |
 | begin_work / end_work | 插桩提前后三轮实测均 36 / 36，`outstanding` 1 → 0（收窄）；五条异常收尾路径全部归还着色器（**相等不是判据，"差额未变宽"才是**） |
-| 动画路径总线 | 首个**非预览**动画会构造 UPower 代理（沙箱 135 µs），之后 `OnBattery` 读本地缓存：gjs 1.88 实测 50 次读共 634 µs（≈13 µs/次，代理 `flags==0` ⇒ GIO 自持 PropertiesChanged 订阅）。有电源约束时第一次 3.2 ms（沙箱内 3191 µs），之后 29–89 µs（2026-10-09） |
+| 动画路径总线 | 首个**非预览**动画会构造 UPower 代理（沙箱 135 µs），之后 `OnBattery` 读本地缓存：gjs 1.88 实测 50 次读共 634 µs（≈13 µs/次，代理 `flags==0` ⇒ GIO 自持 PropertiesChanged 订阅）。有电源约束时第一次 2.8–4.2 ms（2026-10-09 四次独立采样：2791 / 3156 / 4186 / 4197 µs），之后 28–89 µs |
 | ease 覆写落空 | 探针 05 的 `easeFallthroughsNatural`：26 个真窗口各开合一次实测 **0** 次 —— D-034 那条分支在 GNOME 50 / Wayland 的普通窗口流量下走不到，属潜在正确性而非当前故障 |
 | L1 观测值 | 着色器 26 个 GType、两轮往返约 140 ms；探针 05 每特效 70–73 帧 |
 | 每 profile 的 settings handler | 8（`_profileSignalIds` 的长度就是泄漏计数） |
@@ -103,3 +103,7 @@ disable 后 8 处补丁身份相等、`_profileSignalIds` 与 profile 数成比�
 > 运行期间**不要编辑工作树**：零写入证明比较的是开跑前后的 `git status --porcelain`，
 > 你在跑的同时改文件（哪怕与测试无关）会让它如实报"工作树被改动"并使该次运行作废。
 > 同理，`git commit` 也算改动——先提交，再认证。
+
+> **本表不收单次采样。** "值"列里凡是耗时，要么写成区间并标出采样次数与来源（`run.sh all` 连跑还是
+> 单跑某探针），要么就标着它是单样本。上一版 `enable()` 记的 6 ms / 35 ms 就是这样把机器状态
+> 存成了"基线"：同一份代码重测，20 profiles 那档实测 29–46 ms。

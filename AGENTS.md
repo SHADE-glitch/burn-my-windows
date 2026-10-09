@@ -79,8 +79,10 @@ fork of Burn-My-Windows, used in place with no install step.
 - **Three layers, always in order.** See `MAINTENANCE.md` §1 for what each one can prove.
   - **L0** `npm run check && npm test` — seconds, no display. `check` is `node --check`
     over `extension.js`, `prefs.js` and all of `src/` (32 files); `test` runs every
-    `test/*.test.mjs`. Gates: build freshness, effect registration, sentinel drift, patch
-    symmetry, proxy retry, shader warm-up, repository docs, doc links and `§N` references.
+    `test/*.test.mjs`. Gates: build freshness (including that no bundled icon is left
+    unnamed), effect registration, sentinel drift, patch symmetry, proxy retry, shader
+    warm-up, repository docs, doc links and `§N` references, and the four preferences-window
+    gates (widget-tree degradation, per-effect reset, row descriptions, attribution).
     Adding a file needs no other edit — the glob and CI both pick it up. Run L0 before
     claiming anything about **any** change.
   - **L1** `./test/headless/run.sh all` — real GNOME Shell process, fully sandboxed,
