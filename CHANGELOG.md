@@ -286,3 +286,4 @@ Symptom  `extension.js` 的电源采样注释宣称"轮询是故意的，为避�
 Change   注释改成实测结论并注明条件；探针 05 增加 `easeFallthroughsNatural` 观测（本条不改行为）
 Evidence gjs 1.88 直接实测（同一个 `makeProxyWrapper` 调用路径 + 仓库里那份接口 XML）：代理 `flags == 0`（`G_DBUS_PROXY_FLAGS_NONE` ⇒ GIO 自己保留 PropertiesChanged 订阅维持缓存），50 次 `OnBattery` 读共 **634 µs**（≈13 µs/次）；shell 内同结论：探针 06 `constrainedChooseUs 3299 / 70 / 28`。探针 05 本轮重跑 5/5，`easeFallthroughsNatural = 0`（26 个真窗口各开合一次）
 Cost     §12 那行在字面上不成立（首个非预览动画会构造代理，沙箱 135 µs），读取本身是本地缓存 —— 留给阶段 D 按本节改写。**据此不改代码**：13 µs 可忽略，把 `:909` 改成懒算只会在每次动画多扫一遍 profile。同时 D-034 那条分支的严重性由"当前故障"降为"潜在正确性"：GNOME 50 / Wayland 的 headless mutter 上普通窗口流量一次也没走到它
+Commit   1bfb768
