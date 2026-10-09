@@ -60,7 +60,7 @@ fork 的全部生存能力都压在 GNOME Shell 的私有接口上。`_doEnable(
 
 | 位置 | 符号 | 谁会先发现 |
 | --- | --- | --- |
-| `src/WindowPicker.js:50,54` | `Main.createLookingGlass()`、`new LookingGlass.Inspector` | **没有任何层覆盖**。只能手点"Select app"验证 |
+| `src/WindowPicker.js:56,65` | `Main.createLookingGlass()`、`new LookingGlass.Inspector` | **半边**：探针 04 只证明"两次点击共用一个 inspector、disable 把它交还"；"真点中一个窗口"（`target` 信号）沙箱里发不出来，仍要手点 "Select app" |
 | `src/Shader.js:157` | `Meta.MaximizeFlags.BOTH` | L2（全屏/最大化的判断变错） |
 | `TRexAttack.js:77`、`SnapOfDisintegration.js:77,82`、`PaintBrush.js:68`、`BrokenGlass.js:103,108` | `Cogl.PipelineFilter.LINEAR`、`Cogl.PipelineWrapMode.REPEAT` | 探针 05（这 4 个特效带贴图） |
 | `src/utils.js:137,138,199` | `Cogl.PixelFormat.{RGB_888,RGBA_8888,RGBA_8888_PRE}` | 探针 02/05 |
@@ -68,7 +68,7 @@ fork 的全部生存能力都压在 GNOME Shell 的私有接口上。`_doEnable(
 | `src/Shader.js:142,198` | `global.begin_work()` / `end_work()` | **无人发现**：不平衡只会让电量/时钟统计悄悄错 |
 | `Doom.js:55,113`、`src/utils.js:142` | `global.stage.height` | 探针 05 的 `doom` |
 | `PixelWipe.js:51`、`Incinerate.js:61`、`BrokenGlass.js:76` | `global.get_pointer()` | 探针 05 只能证明"不抛"，沙箱里没有指针 |
-| `extension.js:1112` | `Workspace._windowActor`（运行期字段） | 探针 01 的实例字段臂 |
+| `extension.js:1264` | `Workspace._windowActor`（运行期字段） | 探针 01 的实例字段臂 |
 | `src/effects/*.js` 5 处 | `this._<x>Texture.get_texture()` | 探针 05；另外这决定了**假 actor 走不通**真实 shell 的 `_shouldAnimateActor`（它要 `actor.get_texture()`） |
 
 ---

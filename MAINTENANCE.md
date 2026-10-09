@@ -281,7 +281,7 @@ GType 是否稳定、disable 后有没有残留、dispose 竞态会不会抛、�
   在那里各调一次 `_getUpowerProxy()` / `_getPowerProfilesProxy()`，
   **不要**放回 `enable()`。
   注意：只有 profile 设了 `profile-power-mode` 或 `profile-power-profile` 才会走到；
-  无约束 profile 的动画路径一次总线都不碰（`extension.js:953` 的
+  无约束 profile 的动画路径一次总线都不碰（`_chooseEffect()` 里的
   `if (matches && c.powerProfile != 0)`），当前用户配置就属于这种。
 - **`_doDisable()` 不主动结束正在播放的动画**。07 实测这种情况下全局状态仍然配平
   （shader 被 timeline 自己带着走完并回收），所以这不是待修项；但它是上面那条
@@ -312,7 +312,7 @@ GType 是否稳定、disable 后有没有残留、dispose 竞态会不会抛、�
   **撤回一条旧结论**：本节原先写"`:89` 从迁移来的 keyfile 里剥掉 `test-mode=`，所以迁移过的
   profile 永远进不了测试模式"——不成立。`test-mode` 属于**主** schema
   （`schemas/org.gnome.shell.extensions.burn-my-windows.gschema.xml`），只从 `this._settings`
-  读（`extension.js:1012`），而迁移根本不写主 schema：生成的 keyfile 里本来就不可能有这个键。
+  读（`extension.js:1164`），而迁移根本不写主 schema：生成的 keyfile 里本来就不可能有这个键。
   测试模式对迁移过的 profile 照常生效。
 - `_ALL_EFFECTS` 在 `extension.js` 与 `prefs.js` 里顺序不同（Mushroom 一个垫底一个排第 14）。
   这是合法的，所以所有比较都按**集合**做。

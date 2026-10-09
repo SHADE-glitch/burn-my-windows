@@ -255,7 +255,7 @@ globalThis.__bmw = {
 		return {
 			window_type: type ?? Meta.WindowType.NORMAL,
 			get_wm_class: () => wmClass,
-			// Only .width/.height are ever read (src/Shader.js:145), and
+			// Only .width/.height are ever read (src/Shader.js:150,164), and
             // `new Meta.Rectangle(...)` is not constructible from Eval.
             get_frame_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
 			fullscreen: false,

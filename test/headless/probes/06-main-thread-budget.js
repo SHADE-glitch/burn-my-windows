@@ -31,7 +31,7 @@
 
 		// The stronger property, and the reason enable() is cheap now: the bus is not even
 		// *consulted* on the animation path unless a profile declares a power constraint
-		// (extension.js:953 `if (matches && c.powerProfile != 0)`). If that guard is ever
+		// (`if (matches && c.powerProfile != 0)` in _chooseEffect()). If that guard is ever
 		// hoisted out of the loop, every window animation pays a synchronous round trip --
 		// which is exactly the failure that once blew the greeter timeout at startup.
 		H.chk('busUntouchedOnUnconstrainedAnimations',
@@ -179,13 +179,13 @@
 			H.rec('constrainedChooseUs', `${firstUs} / ${secondUs} / ${thirdUs}`);
 			// Which proxy got consulted is itself the finding: the power-MODE branch (UPower)
 			// runs first, and once it fails, `matches &&` short-circuits the power-PROFILE
-			// branch (extension.js:953) so PowerProfiles is never touched. Asserting on the
-			// wrong one of the two made a working short-circuit look like a bug.
+			// branch (`if (matches && c.powerProfile != 0)`) so PowerProfiles is never touched.
+			// Asserting on the wrong one of the two made a working short-circuit look like a bug.
 			H.chk('upowerProbeDecidedExactlyOnce', inst._upowerProxyChecked === true ? true :
 				`profile-power-mode=1 ran three matched animations and UPower was still not decided`);
 			H.rec('powerProfilesBranch', inst._powerProfilesProxyChecked === true ?
 				'reached (both power constraints survived matching)' :
-				'not reached: matches was already false at extension.js:953 -- measuring that branch needs a profile that matches on every earlier condition');
+				'not reached: matches was already false before the power-profile guard in _chooseEffect() -- measuring that branch needs a profile that matches on every earlier condition');
 			// Steady state must not carry the construction cost.
 			H.chk('noPerAnimationBusRoundTrip', thirdUs < 2000 ? true :
 				`the third constrained animation cost ${thirdUs} us -- a fresh synchronous bus round trip per animation costs 2.2 ms of a 16.7 ms frame`);

@@ -73,7 +73,8 @@
 			chosen && chosen.effect && chosen.effect.constructor.getNick() === wanted ? true :
 			`preview-effect=${wanted} produced ${chosen?.effect?.constructor?.getNick?.() ?? 'nothing'}`);
 
-		// The contract is at extension.js:897-899: `if (!profile || !forOpening)` -- the
+		// The contract is `if (!profile || !forOpening)` in _chooseEffect()'s preview
+		// branch -- the
 		// preview survives the window *open* (that is the animation being previewed) and
 		// is cleared on the first *close*. Asserting a clear after an open was my mistake;
 		// asserting it after a close is what catches a preview that would stick forever.
@@ -104,7 +105,7 @@
 		// Functions with these exact names put '_mapWindow@' / '_destroyWindow@' in the
 		// stack, which is what the fork greps for.
 		// `meta_window` is required: _chooseEffect() bails on its very first guard
-		// (`if (!actor.meta_window) return null`, extension.js:860), and then the fork
+		// (`if (!actor.meta_window) return null`), and then the fork
 		// correctly hands the animation to the shell's own _shouldAnimateActor -- which
 		// dereferences actor.get_texture() on a probe object that has none. Without this
 		// the takeover branch is never reached and the probe blames the fork.
@@ -176,7 +177,7 @@
 
 		// And when a stack frame matches but the window type is not one the fork animates,
 		// it must still hand the animation back. DOCK is neither NORMAL nor a dialog, so
-		// _chooseEffect() returns null at its type guard (extension.js:869-873). This was
+		// _chooseEffect() returns null at its window-type guard. This check was
 		// first written with an ordinary NORMAL-window stub, which *does* match (fire is
 		// the only default-enabled effect, and it is enabled) -- so the fork returned true
 		// and the check was testing the wrong premise, not a wrong fork.

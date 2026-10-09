@@ -100,6 +100,14 @@ fork of Burn-My-Windows, used in place with no install step.
   `test/effect-registry.test.mjs`, `test/build-freshness.test.mjs` and probes 02/05; the
   probe derives its expectation from the GResource bundle, not from `_ALL_EFFECTS`,
   because comparing a list with itself proves nothing.
+- **`file:line` anchors decay in bulk, and nothing checks them.** Adding or removing lines in
+  `extension.js` silently invalidates every citation of the form `extension.js:953` in the probes,
+  in `MAINTENANCE.md` and in `docs/maintenance/` — they keep reading as evidence while pointing at
+  unrelated code. After any change that moves lines, re-walk them mechanically
+  (`grep -rn "extension\.js:[0-9]" --include="*.md" --include="*.js" . | grep -v reports/`, then
+  print each target line) — or write the reference by symbol instead
+  (`_chooseEffect()`'s `if (matches && c.powerProfile != 0)`), which is what probe comments now use.
+  `test/docs-links.test.mjs` proves links and `§N` resolve; it cannot see line numbers drift.
 - **Gates must be able to fail.** Prove it with mutations: tamper a `.frag`, drop an
   effect from `_ALL_EFFECTS`, add a 9th `this._orig…` capture without updating `PATCHES`,
   or un-guard one install. Prefer a `cp -a` copy; if you mutate the working tree instead,

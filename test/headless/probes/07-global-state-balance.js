@@ -225,7 +225,8 @@
 		//  * the overview clone's overlayEnabled restore needs a live WindowPreview handle,
 		//    which is only reachable through overview internals -- that is an L2 look.
 		//  * kill-window-effects is a Meta WM signal; it cannot be emitted from Eval, so the
-		//    handler at extension.js:343 is exercised only by L2's minimise / workspace switch.
+		//    handler -- `global.window_manager.connect('kill-window-effects', ...)` in _doEnable()
+		//    -- is exercised only by L2's minimise / workspace switch.
 		H.rec('notCoveredByThisProbe', 'overview overlayEnabled restore (L2) and kill-window-effects (L2)');
 
 		H.done();
