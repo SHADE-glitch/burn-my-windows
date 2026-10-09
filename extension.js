@@ -299,8 +299,17 @@ export default class BurnMyWindows extends Extension {
           const chosenEffect = extensionThis._chooseEffect(actor, forOpening);
 
           if (chosenEffect) {
-            // Store the original ease() method of the actor.
-            const orig = actor.ease;
+            // Store the original ease() method of the actor. It has to be kept *on*
+            // the actor rather than read back off `actor.ease` here: the override
+            // installed below stays in place when a resize consumes the call instead
+            // of the window animation, so reading `actor.ease` a second time would
+            // capture our own closure and grow a chain of them -- one retained
+            // effect plus its profile's settings per takeover, and a stale closure
+            // which still fires on paths this patch deliberately delegates.
+            if (!actor._bmwEaseOriginal) {
+              actor._bmwEaseOriginal = actor.ease;
+            }
+            const orig = actor._bmwEaseOriginal;
 
             // Now intercept the next call to actor.ease().
             actor.ease = function(...params) {
@@ -321,12 +330,19 @@ export default class BurnMyWindows extends Extension {
               if (forClosing || forOpening) {
                 // Quickly restore the original behavior. Nobody noticed, I guess :D
                 actor.ease = orig;
+                actor._bmwEaseOriginal = null;
 
                 // And then create the effect!
                 extensionThis._setupEffect(actor, forOpening, chosenEffect.effect,
                                            chosenEffect.profile);
               } else {
-                orig.apply(this, params);
+                // This was the resize, not the window animation: let the shell have it
+                // and stay installed for the animation we are waiting for. Counted
+                // because whether this branch is reached at all on a given shell
+                // version is what decides how much the case above matters.
+                extensionThis._easeFallthroughs =
+                  (extensionThis._easeFallthroughs ?? 0) + 1;
+                return orig.apply(this, params);
               }
             };
 
@@ -587,6 +603,20 @@ export default class BurnMyWindows extends Extension {
       WindowPreview.prototype._restack = this._origRestack;
     if (this._origInit)
       WindowPreview.prototype._init = this._origInit;
+
+    // Take back any ease() override which is still pending on a window actor. Such an
+    // override is only handed back when it meets the actual window animation -- a
+    // resize can consume the call instead (issue 335 above) -- so an actor can still
+    // carry one when disable() runs. Its next window close would then call into a
+    // disabled extension and throw from inside the shell's own destroy path. The
+    // marker is a plain JS expando, so reading it is safe on an actor which is
+    // already disposed; `ease` itself is only touched when it is ours.
+    for (const actor of global.get_window_actors()) {
+      if (actor._bmwEaseOriginal) {
+        actor.ease = actor._bmwEaseOriginal;
+        actor._bmwEaseOriginal = null;
+      }
+    }
 
     // Disconnect the active-profile handler. This has to happen before we drop the
     // settings reference below. Otherwise the handler would outlive disable() and

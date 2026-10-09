@@ -76,7 +76,12 @@ function makeShell({drop = [], originals = {}} = {}) {
       _deleteAll: defined('_deleteAll'),
       _restack: defined('_restack'),
     }},
-    global: {window_manager: {connect: () => 1}},
+    global: {
+      window_manager: {connect: () => 1},
+      // disable() walks the live window actors to take back pending ease() overrides,
+      // so the restore slice needs the call to exist even when there is nothing to do.
+      get_window_actors: () => [],
+    },
   };
 }
 
@@ -217,12 +222,12 @@ test('every replacement runs and reaches its original without throwing', async (
     '_restack should forward to the original');
 
   // With an effect configured, _shouldAnimateActor takes the animation over instead
-  // of delegating. That path is unreachable here: it recognises the window-open and
-  // window-close paths by looking for '_mapWindow@' / '_destroyWindow@' in
-  // (new Error()).stack, and that '@' frame syntax is SpiderMonkey's. V8 writes
-  // 'at _mapWindow (...)' instead, so the branch is inert under Node. The next test
-  // pins the assumption, and covering the branch for real needs the headless-shell
-  // integration script.
+  // of delegating. That hand-written call below cannot reach the takeover on its own:
+  // it recognises the window-open and window-close paths by looking for
+  // '_mapWindow@' / '_destroyWindow@' in (new Error()).stack, and that '@' frame
+  // syntax is SpiderMonkey's, while V8 writes 'at _mapWindow (...)'. The two
+  // withStack() cases further down drive the takeover by supplying a Gecko-shaped
+  // stack, and tier 1 drives it on a real shell process.
 
   // A _shouldAnimateActor that is not on either path must still reach the original,
   // which is the case for every unrelated caller such as minimise.
@@ -383,3 +388,116 @@ test('an unchosen effect still delegates to the original', () => {
     'with no effect configured the shell animation must still run');
   assert.equal(actor.ease(), 'stock', 'ease() must be left alone when nothing was chosen');
 });
+
+// ------------------------------------------------------------------ the fallthrough
+// Issue 335: a non-GTK window can be resized right after it is mapped, so the very
+// first ease() call the override sees is that resize and not the window animation.
+// Upstream deliberately leaves the override installed in that case so the real
+// animation still gets intercepted -- which is right -- but reading the original back
+// off `actor.ease` on the next install then captures the previous closure instead of
+// the shell's own ease(). Every claimed animation lengthens that chain by one closure,
+// each of which retains its chosen effect and that profile's Gio.Settings, and the
+// innermost stale closure keeps firing on paths the patch chose to delegate.
+
+function fallthroughActor() {
+  const setUps = [];
+  const stockCalls = [];
+  const shell = makeShell();
+  const ext = makeExt({
+    _chooseEffect: () => ({effect: 'e', profile: 'p'}),
+    _setupEffect: (actor, forOpening, effect, profile) => setUps.push({forOpening, effect}),
+  });
+  installInto(ext, shell);
+  const originalEase = function ease(...params) {
+    stockCalls.push(params);
+    return 'stock ease';
+  };
+  const actor = {ease: originalEase};
+  return {shell, ext, actor, setUps, stockCalls, originalEase};
+}
+
+test('a resize fallthrough keeps the override pending but does not grow a chain', () => {
+  const {shell, actor, setUps, stockCalls, originalEase} = fallthroughActor();
+
+  // The patch claims the window-open animation and installs its override.
+  withStack(GECKO_OPEN, () => shell.wm._shouldAnimateActor.call(shell.wm, actor, 1));
+  assert.notEqual(actor.ease, originalEase, 'the override was not installed');
+
+  // A resize lands first. It has to reach the pristine ease() -- return value and all,
+  // as the shell hands the resulting Animation on to its callers -- and the override
+  // has to stay pending, otherwise the real animation never gets intercepted.
+  const fell = withStack('  unrelatedFrame@file:///a.js:9:9', () => actor.ease({duration: 200}));
+  assert.equal(stockCalls.length, 1, 'the fallthrough never reached the shell ease()');
+  assert.equal(fell, 'stock ease', 'the fallthrough did not pass ease()\'s result through');
+  assert.equal(setUps.length, 0, 'a resize must not create an effect');
+
+  // The shell then claims a later animation on the same actor, and it plays.
+  withStack(GECKO_CLOSE, () => shell.wm._shouldAnimateActor.call(shell.wm, actor, 1));
+  withStack(GECKO_CLOSE, () => actor.ease({duration: 500, opacity: 0}));
+
+  assert.equal(setUps.length, 1, 'the animation must be set up exactly once');
+  // Handing anything other than the pristine ease back means a stale override is now
+  // the actor's ease() for the rest of its lifetime.
+  assert.equal(actor.ease, originalEase,
+    'ease() was handed back as a stale closure instead of the shell original');
+});
+
+test('a delegated animation is not retroactively burned by an old closure', () => {
+  // After a fallthrough has left a closure pending, the patch may later *delegate*
+  // because no profile applies to this trigger. The shell then eases the window
+  // itself -- and if that call lands on a stale closure it plays an effect chosen for
+  // a different window state, on a path where the fork decided not to act.
+  const {shell, ext, actor, setUps, originalEase} = fallthroughActor();
+
+  withStack(GECKO_OPEN, () => shell.wm._shouldAnimateActor.call(shell.wm, actor, 1));
+  withStack('  unrelatedFrame@file:///a.js:9:9', () => actor.ease({duration: 200}));
+  withStack(GECKO_CLOSE, () => shell.wm._shouldAnimateActor.call(shell.wm, actor, 1));
+  withStack(GECKO_CLOSE, () => actor.ease({duration: 500, opacity: 0}));
+  assert.equal(setUps.length, 1, 'the first takeover already miscounted');
+
+  // Now no profile matches the close, so the patch must hand the animation over.
+  ext._chooseEffect = () => undefined;
+  const delegated = withStack(GECKO_CLOSE, () =>
+    shell.wm._shouldAnimateActor.call(shell.wm, actor, 1));
+  assert.equal(delegated, '_shouldAnimateActor', 'the unchosen close must delegate');
+
+  setUps.length = 0;
+  withStack(GECKO_CLOSE, () => actor.ease({duration: 500, opacity: 0}));
+
+  assert.equal(setUps.length, 0,
+    'a stale ease closure created an effect on a path the patch delegated');
+  assert.equal(actor.ease, originalEase, 'ease() is not the shell original');
+});
+
+test('disable() takes back an ease() override that is still pending', () => {
+  // enable() can only be undone for the prototype methods it replaced; an override
+  // sitting on a live window actor is the extension's own doing and outlives the
+  // patch set. Left in place, the next close of that window calls back into a
+  // disabled extension.
+  const shell = makeShell();
+  const ext = makeExt({
+    _chooseEffect: () => ({effect: 'e', profile: 'p'}),
+    _setupEffect: () => {},
+  });
+  installInto(ext, shell);
+
+  const originalEase = function ease() { return 'stock ease'; };
+  const actor = {ease: originalEase, meta_window: {}};
+  withStack(GECKO_OPEN, () => shell.wm._shouldAnimateActor.call(shell.wm, actor, 1));
+  // A resize consumes nothing: the override is still installed when disable() runs.
+  withStack('  unrelatedFrame@file:///a.js:9:9', () => actor.ease({duration: 200}));
+  assert.notEqual(actor.ease, originalEase, 'the override should still be pending');
+
+  // The shell hands over destroyed actors too, and touching a GObject property of a
+  // disposed actor makes GJS warn once per access, so the restore must read its own
+  // marker before it goes anywhere near ease().
+  const destroyed = {};
+  Object.defineProperty(destroyed, 'ease', {get() { throw new Error('already disposed'); }});
+  shell.global.get_window_actors = () => [actor, destroyed];
+
+  assert.doesNotThrow(() => restoreInto(ext, shell),
+    'disable() must not break on an actor that is already gone');
+  assert.equal(actor.ease, originalEase,
+    'disable() left the extension ease() override on a live window actor');
+});
+
