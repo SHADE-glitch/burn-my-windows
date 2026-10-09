@@ -667,7 +667,7 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
       settingSignalHandler();
     }
 
-    this._bindResetButton(settingsKey);
+    this._finishBinding(settingsKey);
   }
 
   // ----------------------------------------------------------------------- private stuff
@@ -836,6 +836,14 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
     this._profileConnections = [];
   }
 
+  // Every binding path ends here: the row's explanation and both reset behaviours are all
+  // derived from the same settings key, so a new bind helper wires them together or not at
+  // all. Keeping the two concerns in separate methods keeps each one testable on its own.
+  _finishBinding(settingsKey) {
+    this._describeRow(settingsKey);
+    this._bindResetButton(settingsKey);
+  }
+
   // Searches for a reset button for the given settings key and make it reset the settings
   // key when clicked.
   _bindResetButton(settingsKey) {
@@ -856,6 +864,57 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
       });
       resetButton._isConnected = true;
     }
+  }
+
+  // Fill in the one-line explanation GNOME already has: the schema's own description of the
+  // key. Nothing new becomes translatable here -- the text comes out of gschemas.compiled at
+  // runtime -- and a row is left alone when it already carries a subtitle (some effects wrote
+  // better ones than their schema does) or when the description would only repeat the title.
+  _describeRow(settingsKey) {
+    // The enable switch is excluded: its row is the effect's own header row, whose title
+    // already is the effect's name, so "Use the fire effect." under "Fire" is noise rather
+    // than an explanation.
+    if (settingsKey.endsWith('-enable-effect')) {
+      return;
+    }
+
+    const row = this._findRowFor(settingsKey);
+    if (!row || row.subtitle !== '') {
+      return;
+    }
+
+    const schema = this.getProfileSettings().settings_schema;
+
+    // get_key() throws for a key the schema does not have, which is exactly the kind of typo a
+    // renamed setting turns into.
+    if (!schema.has_key(settingsKey)) {
+      return;
+    }
+
+    const key = schema.get_key(settingsKey);
+    const description = key.get_description();
+    if (description === '' || description === key.get_summary()) {
+      return;
+    }
+
+    row.set_subtitle(description);
+  }
+
+  // Returns the AdwActionRow that presents the given settings key, or null. Bound widgets are
+  // not always inside their row -- a scale binds its GtkAdjustment, which has no ancestors at
+  // all -- so the row is also looked up through the per-option reset button, which sits in the
+  // same row as a sibling.
+  _findRowFor(settingsKey) {
+    const widget = this._builder.get_object(settingsKey);
+    if (widget && widget.get_ancestor) {
+      const row = widget.get_ancestor(Adw.ActionRow);
+      if (row) {
+        return row;
+      }
+    }
+
+    const resetButton = this._builder.get_object('reset-' + settingsKey);
+    return resetButton ? resetButton.get_ancestor(Adw.ActionRow) : null;
   }
 
   // Resets every option the given effect declared for itself -- in the profile being edited
@@ -880,7 +939,7 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
                                      Gio.SettingsBindFlags.DEFAULT);
     }
 
-    this._bindResetButton(settingsKey);
+    this._finishBinding(settingsKey);
   }
 
   // Reads the contents of a JSON file contained in the global resources archive. The data

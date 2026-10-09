@@ -133,20 +133,20 @@ test('a key whose row has no per-option button is still covered', () => {
 });
 
 test('every binding path feeds the collection', () => {
-  // _bindResetButton is the single funnel: each public bind* helper reaches it, which is why
-  // recording there covers keys this file never mentions by name. A new bind path that skips
-  // the funnel would silently drop its key from every per-effect reset -- invisible until a
-  // user notices one option that will not go back.
+  // The bind helpers all converge -- either directly on _finishBinding or on _bind, which
+  // then reaches it. That is why recording in the funnel covers keys this file never mentions
+  // by name. A new bind path that skips the convergence would silently drop its key from every
+  // per-effect reset -- invisible until a user notices one option that will not go back.
   const funnels = ['bindComboRow', 'bindComboBox', 'bindEntry', 'bindAdjustment', 'bindSwitch',
                    'bindColorButton'];
   for (const name of funnels) {
     const body = sliceMethod(PREFS_SRC, name);
-    assert.ok(/_bind\(|_bindResetButton\(/.test(body),
-      `${name}() no longer reaches _bind / _bindResetButton, so its keys escape the per-effect ` +
+    assert.ok(/this\._bind\(|this\._finishBinding\(/.test(body),
+      `${name}() no longer reaches _bind / _finishBinding, so its keys escape the per-effect ` +
       'reset set -- record them explicitly or route it through the funnel');
   }
-  const reached = funnels.filter((name) => /_bindResetButton\(/.test(sliceMethod(PREFS_SRC, name)));
-  assert.ok(reached.length >= 1,
-    'not one bind helper calls _bindResetButton itself -- the funnel above is matching prose, ' +
-    'not code');
+  // The implied step of the sentence above: five of the six only reach the funnel through
+  // _bind, so without this the assertion would still pass if _bind stopped forwarding.
+  assert.match(sliceMethod(PREFS_SRC, '_bind'), /this\._finishBinding\(/,
+    '_bind() no longer forwards to the funnel, so the five helpers above reach a dead end');
 });
