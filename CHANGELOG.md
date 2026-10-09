@@ -287,3 +287,10 @@ Change   注释改成实测结论并注明条件；探针 05 增加 `easeFallthr
 Evidence gjs 1.88 直接实测（同一个 `makeProxyWrapper` 调用路径 + 仓库里那份接口 XML）：代理 `flags == 0`（`G_DBUS_PROXY_FLAGS_NONE` ⇒ GIO 自己保留 PropertiesChanged 订阅维持缓存），50 次 `OnBattery` 读共 **634 µs**（≈13 µs/次）；shell 内同结论：探针 06 `constrainedChooseUs 3299 / 70 / 28`。探针 05 本轮重跑 5/5，`easeFallthroughsNatural = 0`（26 个真窗口各开合一次）
 Cost     §12 那行在字面上不成立（首个非预览动画会构造代理，沙箱 135 µs），读取本身是本地缓存 —— 留给阶段 D 按本节改写。**据此不改代码**：13 µs 可忽略，把 `:909` 改成懒算只会在每次动画多扫一遍 profile。同时 D-034 那条分支的严重性由"当前故障"降为"潜在正确性"：GNOME 50 / Wayland 的 headless mutter 上普通窗口流量一次也没走到它
 Commit   1bfb768
+
+### D-039 · 2026-10-09 · fix · v48
+Symptom  `Main.wm._waitForOverviewToHide` 只要扩展启用就被替换成"立刻返回"，与有没有特效无关 —— 把所有开关都关掉的用户拿不到原生行为，窗口会在概览还在退场时 map
+Change   改为按调用判断：`_anyEffectEnabled()` 读 `_loadProfiles()` 已缓存的 `enabledEffects`（每次调用不碰设置）。判断放在调用时而非 `enable()` 时，因为启用集合是在偏好窗口里改的，扩展全程保持启用
+Evidence L0 本轮重跑 `npm test` 49/49（`patch-symmetry` 新增 3 条：全关让路 / 有特效仍跳过（反向对照） / `_anyEffectEnabled` 的缓存语义；「恒不让路」「`some`→`every`」「恒返回 false」三种注入各掉 1 条）；L1 探针 01 13/13、03 **27**/27、04 25/25、07 3/3，CRITICAL 0，零写入三哈希不变
+Cost     **这是一次可感知的行为变化**：全关时窗口 map 时机回到原生（等概览退场）。若用户偏好原来的"永远不等"，回退本条即可，判据与守卫都在测试里
+Commit   16a67db
