@@ -12,9 +12,11 @@
 // the way prefs-window-chrome.test.mjs runs the widget-tree surgery.
 
 import assert from 'node:assert/strict';
+import {readFileSync, readdirSync} from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 
-import {PREFS_SRC, sliceMethod} from './lib/extension-slices.mjs';
+import {PREFS_SRC, ROOT, sliceMethod} from './lib/extension-slices.mjs';
 
 const METHODS = new Function(
   `return {${sliceMethod(PREFS_SRC, '_bindResetButton')},\n` +
@@ -149,4 +151,38 @@ test('every binding path feeds the collection', () => {
   // _bind, so without this the assertion would still pass if _bind stopped forwarding.
   assert.match(sliceMethod(PREFS_SRC, '_bind'), /this\._finishBinding\(/,
     '_bind() no longer forwards to the funnel, so the five helpers above reach a dead end');
+});
+
+test('an effect binds its options where the marker is up', () => {
+  // Recording happens while prefs.js's effect loop holds `_bindingEffect` set, and that loop
+  // is the only caller of `bindPreferences()`. An effect that bound one of its own keys from
+  // anywhere else -- when its page is realized, say -- would land outside every effect's key
+  // set, and the two assertions above would stay green: they only speak about the helpers.
+  // So the *call sites* have to be scanned, not just the helpers.
+  const dir = path.join(ROOT, 'src/effects');
+  const offenders = [];
+  let files = 0, sites = 0;
+
+  for (const entry of readdirSync(dir).sort()) {
+    if (!entry.endsWith('.js')) continue;
+    files++;
+    let method = null;
+    for (const line of readFileSync(path.join(dir, entry), 'utf8').split('\n')) {
+      // Class methods of an effect are indented by exactly two spaces; anything less or more
+      // is not a method, so the marker never silently sticks to a nested function.
+      const m = /^  (?:static )?([A-Za-z_]+)\(/.exec(line);
+      if (m) method = m[1];
+      if (/\bdialog\.bind[A-Za-z]*\(/.test(line)) {
+        sites++;
+        if (method !== 'bindPreferences') offenders.push(`${entry}: ${method}()`);
+      }
+    }
+  }
+
+  assert.ok(files > 0 && sites > 0,
+    `scanned ${files} effect file(s) and found ${sites} bind call(s) -- a scan over nothing `
+    + 'is how this gate would start passing without protecting anything');
+  assert.deepEqual(offenders, [],
+    `these bind calls are outside bindPreferences(), so their keys reach no "reset this `
+    + `effect": ${offenders.join(', ')}`);
 });
