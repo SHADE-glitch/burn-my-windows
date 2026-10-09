@@ -233,6 +233,10 @@ export default class BurnMyWindowsPreferences extends ExtensionPreferences {
     // accordion-like behavior of the effect settings.
     this._effectRows = [];
 
+    // The settings keys each effect wired up, filled while the profile is loaded and read by
+    // the per-effect reset buttons.
+    this._effectKeys = {};
+
     // Now add all the rows.
     this._ALL_EFFECTS.forEach(effect => {
       const [minMajor, minMinor] = effect.getMinShellVersion();
@@ -262,6 +266,19 @@ export default class BurnMyWindowsPreferences extends ExtensionPreferences {
         previewButton.set_valign(Gtk.Align.CENTER);
         previewButton.connect('clicked', () => {
           this._previewEffect(effect);
+        });
+
+        // The reset button for every option this effect declares. It deliberately reuses
+        // the wording of the per-option reset buttons: this fork has no .po sources to
+        // regenerate (see MAINTENANCE.md §13), so a new string here would render untranslated
+        // in all 36 languages while the reused one is already translated.
+        const resetButton = Gtk.Button.new_from_icon_name('edit-clear-symbolic');
+        resetButton.get_style_context().add_class('circular');
+        resetButton.get_style_context().add_class('flat');
+        resetButton.set_tooltip_text(_('Reset to Default Value'));
+        resetButton.set_valign(Gtk.Align.CENTER);
+        resetButton.connect('clicked', () => {
+          this._resetEffect(effect.getNick());
         });
 
         // The toggle button for enabling and disabling the effect.
@@ -304,6 +321,7 @@ export default class BurnMyWindowsPreferences extends ExtensionPreferences {
             }
           });
           this._effectRows.push(row);
+          row.add_action(resetButton);
           row.add_action(button);
         } else {
           row.add_suffix(button);
@@ -707,8 +725,15 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
     this._ALL_EFFECTS.forEach(effect => {
       const [minMajor, minMinor] = effect.getMinShellVersion();
       if (utils.shellVersionIsAtLeast(minMajor, minMinor)) {
+
+        // Mark which effect is being wired up, so that _bindResetButton can record the key
+        // set the "reset this effect" button has to cover. Deriving the set here rather than
+        // by scanning the schema for a `<nick>-` prefix is deliberate: `tv-` is also the
+        // prefix of every `tv-glitch-` key, so a prefix scan would reset a second effect.
+        this._bindingEffect = effect.getNick();
         this.bindSwitch(`${effect.getNick()}-enable-effect`);
         effect.bindPreferences(this);
+        this._bindingEffect = null;
       }
     });
 
@@ -814,12 +839,32 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
   // Searches for a reset button for the given settings key and make it reset the settings
   // key when clicked.
   _bindResetButton(settingsKey) {
+    // Record the key for the effect being wired up, which is what _resetEffect later resets.
+    if (this._bindingEffect) {
+      if (!this._effectKeys[this._bindingEffect]) {
+        this._effectKeys[this._bindingEffect] = new Set();
+      }
+      // A Set because _loadActiveProfile runs again on every profile switch: a key visited
+      // twice must still be reset once per click.
+      this._effectKeys[this._bindingEffect].add(settingsKey);
+    }
+
     const resetButton = this._builder.get_object('reset-' + settingsKey);
     if (resetButton && !resetButton._isConnected) {
       resetButton.connect('clicked', () => {
         this.getProfileSettings().reset(settingsKey);
       });
       resetButton._isConnected = true;
+    }
+  }
+
+  // Resets every option the given effect declared for itself -- in the profile being edited
+  // and in no other. The key set is the one collected while that effect was wired up, so one
+  // effect's reset cannot reach another effect's keys.
+  _resetEffect(nick) {
+    const settings = this.getProfileSettings();
+    for (const key of this._effectKeys[nick]) {
+      settings.reset(key);
     }
   }
 
