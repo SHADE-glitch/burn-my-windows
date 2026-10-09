@@ -23,7 +23,8 @@
 //     a moved section keeps its number as a heading in the file that now holds it.
 //   - A `§N` reference names its target file when the target is not in the file the
 //     reference sits in. A bare `§N` means: this file's own heading N if it has one,
-//     otherwise MAINTENANCE.md's.
+//     otherwise MAINTENANCE.md's. A file name written next to a `§N` beats chain
+//     inheritance, and a comma ends a clause rather than gluing a name to a number.
 //   - `原 MAINTENANCE §N` is a provenance marker ("this used to be §N there"), not a
 //     live pointer, so it is masked before checking.
 
@@ -179,20 +180,45 @@ const decodeAnchor = (a) => {
   }
 };
 
-// How far a file name may sit from the `§N` it qualifies. Only punctuation, spacing and
-// conjunctions count as "attached"; any other word in between means the file name belonged
-// to a different clause and the reference has to be read as bare.
-const ATTACHED_BEFORE = /([\w./-]*\.md)(?:[\s`'"“”（）()\[\]【】:：,，、;；/~–—-]*)$/;
+// How far a file name may sit from the `§N` it qualifies. Only punctuation and spacing count
+// as "attached"; any word in between means the file name belonged to a different clause and
+// the reference has to be read as bare. A comma is deliberately NOT attachment glue: in
+// "…`a.md`，§6 → `b.md`" the leading name qualifies the previous reference, not this one.
+const ATTACHED_BEFORE = /([\w./-]*\.md)(?:[\s`'"“”（）()\[\]【】:：;；/~–—-]*)$/;
 const ATTACHED_AFTER = /^[\s`'"（）()\[\]【】:：,，、;；/~–—→-]*$/;
 const ONLY_JOINERS = /^[\s、，,与和/（）()【】~-]*$/;
 
 /**
- * Every `§N` in `rel` with the file it points at. Resolution order:
- *   1. a `.md` attached right before the number  → that file;
+ * Resolve one `§N` occurrence to the file it names. Precedence is pinned by a unit check
+ * below, because getting it wrong silently mis-points a citation:
+ *   1. a `.md` attached right before the number → that file;
  *   2. a `.md` attached right after it (`§6 → [docs/…]`, the router's own index form) → that file;
- *   3. attached to nothing: the referring file's own §N if it has one, otherwise MAINTENANCE.md.
- * `§5 / §7 / §10` is one chain, so every number in it inherits the same target.
+ *   3. a pure joiner back to a reference already read on this line (`§8 与 §12`) → its file;
+ *   4. attached to nothing: the referring file's own §N if it has one, otherwise MAINTENANCE.md.
+ * An explicit name outranks inheritance: `§5 / §7 → a.md，§6 → b.md` is one sentence per
+ * destination, and read the other way round §6 keeps pointing at a.md while still looking cited.
+ * `§5 / §7 / §10` is one match, so every number in the chain inherits the same target.
+ * Returns `{file, raw}`; `file` is null exactly when a name was attached but is not a file,
+ * and `raw` is that name so the caller can report which token broke.
  */
+function targetOfReference(line, m, rel, own, prev) {
+  const before = ATTACHED_BEFORE.exec(line.slice(0, m.index));
+  if (before) {
+    return {file: resolveMd(before[1], rel), raw: before[1]};
+  }
+  const after = line.slice(m.index + m[0].length);
+  const afterM = MD_TOKEN.exec(after);
+  if (afterM && ATTACHED_AFTER.test(after.slice(0, afterM.index))) {
+    return {file: resolveMd(afterM[0], rel), raw: afterM[0]};
+  }
+  if (prev && prev.file && ONLY_JOINERS.test(line.slice(prev.end, m.index))) {
+    return {file: prev.file, raw: null};
+  }
+  if (own.has(numbersIn(m)[0])) return {file: rel, raw: null};
+  return {file: ROUTER, raw: null};
+}
+
+/** Every `§N` in `rel` with the file it points at. */
 function sectionReferences(rel) {
   const found = [];
   const own = numberedSections(rel);
@@ -201,29 +227,12 @@ function sectionReferences(rel) {
     const line = raw.replace(PROVENANCE, '');
     let prev = null; // {end, file} of the previous reference on this line, for `§8 与 §12`
     for (const m of line.matchAll(SEC_REF)) {
-      let target = null;
-      let missingToken = null;
-      const before = ATTACHED_BEFORE.exec(line.slice(0, m.index));
-      const after = line.slice(m.index + m[0].length);
-      const afterM = MD_TOKEN.exec(after);
-      if (prev && prev.file && ONLY_JOINERS.test(line.slice(prev.end, m.index))) {
-        target = prev.file;
-      } else if (before) {
-        target = resolveMd(before[1], rel);
-        if (!target) missingToken = before[1];
-      } else if (afterM && ATTACHED_AFTER.test(after.slice(0, afterM.index))) {
-        target = resolveMd(afterM[0], rel);
-        if (!target) missingToken = afterM[0];
-      } else if (own.has(numbersIn(m)[0])) {
-        target = rel;
-      } else {
-        target = ROUTER;
-      }
-      prev = {end: m.index + m[0].length, file: target};
+      const hit = targetOfReference(line, m, rel, own, prev);
+      prev = {end: m.index + m[0].length, file: hit.file};
       for (const n of numbersIn(m)) {
-        found.push(missingToken
-          ? {n, file: null, raw: missingToken, line: i + 1, text: raw}
-          : {n, file: target, line: i + 1, text: raw});
+        found.push(hit.file === null
+          ? {n, file: null, raw: hit.raw, line: i + 1, text: raw}
+          : {n, file: hit.file, line: i + 1, text: raw});
       }
     }
   });
@@ -335,6 +344,75 @@ describe('the maintenance runbook is still reachable after the split', () => {
     // with the space before 18 kept as a dash.
     const sec0 = slugCandidates('0. 三十秒速查');
     assert.ok(sec0.includes('0-三十秒速查'), `unexpected slug set: ${sec0.join(' | ')}`);
+  });
+
+  it('a §N resolves to the name written next to it, not to the previous clause', () => {
+    // Unit check on the resolver that every file-level gate above consumes. A precedence flip
+    // (chain inheritance read before the explicit file name), or a comma counted as attachment
+    // glue, mis-points a citation while the whole suite stays green — so this pins the order
+    // on synthetic lines instead of relying on the repo happening to contain the shape.
+    const own = new Map(); // the referring file has no numbered sections of its own
+    const FROM = 'CHANGELOG.md';
+    const refs = (text) => [...text.matchAll(SEC_REF)];
+
+    const chain = '§5 / §7 / §10 → `docs/maintenance/shell-internal-api.md`，' +
+      '§6 → `docs/maintenance/compat-matrix.md`';
+    const ms = refs(chain);
+    assert.equal(ms.length, 2, 'this fixture no longer holds the shape the precedence rule is about');
+    const first = targetOfReference(chain, ms[0], FROM, own, null);
+    assert.equal(first.file, API, `unexpected target ${first.file} for the leading chain`);
+    assert.deepEqual(numbersIn(ms[0]), [5, 7, 10], 'the leading chain stopped being a single match');
+    const second = targetOfReference(chain, ms[1], FROM, own,
+      {end: ms[0].index + ms[0][0].length, file: first.file});
+    assert.equal(second.file, COMPAT,
+      '§6 names its own file after a comma; inheriting the previous clause instead is exactly ' +
+      'the mis-point that precedence exists for — it would read as a correct citation');
+
+    // Controls: inheritance has to keep working where nothing is attached, a bare reference
+    // still has to fall back to the router, and an attached path that is not a file has to
+    // fail loudly rather than quietly resolve somewhere else.
+    const joined = '对照 §8 与 §12 的基线';
+    const jm = refs(joined);
+    assert.equal(jm.length, 2, 'the joiner fixture stopped matching, so the control below tests nothing');
+    const inherited = targetOfReference(joined, jm[1], FROM, own,
+      {end: jm[0].index + jm[0][0].length, file: MEASURE});
+    assert.equal(inherited.file, MEASURE,
+      'a bare §N after a joiner must inherit the reference before it, or `§8 与 §12` splits into ' +
+      'two different files');
+    const bare = targetOfReference('见 §13 的已知不修', refs('见 §13 的已知不修')[0], FROM, own, null);
+    assert.equal(bare.file, ROUTER,
+      'a bare §N in a file that has no such heading must fall back to the router');
+    const brokenText = '见 `docs/maintenance/nope.md` §9';
+    const broken = targetOfReference(brokenText, refs(brokenText)[0], FROM, own, null);
+    assert.equal(broken.file, null,
+      'an attached path that is not a file must resolve to nothing — falling back would keep a ' +
+      'broken citation green');
+    assert.equal(broken.raw, 'docs/maintenance/nope.md', 'the failure has to name the token that broke');
+
+    // The two discriminating cases. Each one fails under exactly one of the two rules this
+    // test pins, so neither rule is decoration:
+    //   - explicit name before inheritance: without it, `§12 → measurement.md` keeps §12 on
+    //     whatever §8 fell back to and the written file name is simply ignored;
+    //   - a comma is not attachment glue: with it, "`measurement.md`，§12" silently reads as a
+    //     qualified citation even though the name belongs to the clause before it.
+    const named = '对照 §8 与 §12 → `docs/maintenance/measurement.md` 的基线';
+    const nm = refs(named);
+    assert.equal(nm.length, 2, 'the named-after-a-joiner fixture stopped matching');
+    const fallback = targetOfReference(named, nm[0], FROM, own, null);
+    assert.equal(fallback.file, ROUTER, `unexpected target ${fallback.file} for the bare §8`);
+    const namedHit = targetOfReference(named, nm[1], FROM, own,
+      {end: nm[0].index + nm[0][0].length, file: fallback.file});
+    assert.equal(namedHit.file, MEASURE,
+      '§12 carries its own file name after a joiner; inheriting the previous reference instead ' +
+      'discards what the author wrote next to the number');
+    const comma = '见 `docs/maintenance/measurement.md`，§12 记着基线';
+    const commaHit = targetOfReference(comma, refs(comma)[0], FROM, own, null);
+    assert.notEqual(commaHit.file, MEASURE,
+      'a comma ends the clause: the name belongs to what came before §12, and letting it qualify ' +
+      'this number is how an ambiguous citation passes as a precise one');
+    assert.equal(commaHit.file, ROUTER,
+      `unexpected fallback ${commaHit.file} — a bare §N must still land on the router, where the ` +
+      'file-level gate can reject it for pointing at a pointer line');
   });
 
   it('no markdown cites a moved section by its old MAINTENANCE.md home', () => {
