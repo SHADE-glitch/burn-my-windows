@@ -273,3 +273,10 @@ Change   `_doDisable()` 释放 `_profiles`（空数组而非 null，让迟到读
 Evidence L1 探针 04 本轮重跑 25/25（原 19，新增五条释放断言 + 一条 inspector 复用；沙箱里 LookingGlass 可用，未走 skip）。注入缺陷各自验红：删掉全部释放语句 → 20/25，改回每次新建 inspector → 24/25
 Cost     `_windowPicker` 置 null 后 re-enable 会重建 picker 并重新 `export()` 同一条对象路径 —— 上游这条路径曾因为重复导出而抛 "An object is already exported"（探针 04 的注释记着），本轮 `reenabled` 仍然 PASS，说明重建顺序是对的
 Commit   cb06fa8
+
+### D-037 · 2026-10-09 · fix · v48
+Symptom  `_warmedNicks.add(nick)` 在 `try` 之前、`catch (_e) {}` 不写日志：一次着色器被驱动拒绝就把该特效永久登记为"已预热"，从此不再重试，日志里查不到任何痕迹，而池子会在真正的动画路径上现建该着色器（正是预热要避免的 ~1.1 ms 卡顿）
+Change   只有成功才登记 `_warmedNicks`；失败按 `[burn-my-windows@local]` 前缀 + nick 警告一次，下一次 profile 重载重试；本次运行内的跨 profile 去重改用局部 `queued` 集合
+Evidence L0 本轮重跑 `npm test` 46/46（新增 `test/shader-warmup.test.mjs` 5 条：成功不重复 / 一个失败不结束队列 / 失败不登记且重试且有日志 / 同特效两 profile 只建一次 / 禁用后的源自退；「失败也登记」「仍然静默」「失败即结束」「去掉去重」四种注入各自验出红）；L1 探针 02 重跑 10/10，CRITICAL 0
+Cost     同一条提交把 `sentinel-drift` 的"恰好 5 处 warn"改成"任何 warn 都带前缀"的无边界不变式 —— 计数门在面对正当的新日志行时只会逼人删门。失败重试的代价是每次 profile 重载再试一次，不在动画路径上
+Commit   78e5c47
