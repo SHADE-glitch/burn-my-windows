@@ -357,3 +357,31 @@ Change   `_describeRow()` 在绑定时从 `getProfileSettings().settings_schema`
 Evidence 用到的六个 GI 接口逐个对着本机 typelib 确认存在（`Adw.ActionRow` / `Adw.ExpanderRow` 的 `set_subtitle` / `get_subtitle`、`Gio.SettingsSchema.has_key` / `get_key`、`Gio.SettingsSchemaKey.get_summary` / `get_description`），没有凭记忆写。覆盖度用两种独立方法量过（gjs 反射 bundled `schemas/gschemas.compiled` + 直接解析 schema XML），结论一致；`settings_schema` 确认就是 `src/ProfileManager.js` 里 `lookup('…-profile')` 建出的那份，而不是主 schema 的 7 键。新增 `test/prefs-describe-row.test.mjs`（9 条）+ 两次变异：从汇聚点删掉 `_describeRow` 调用 → 9 条里精确 1 红；从 `_bind` 删掉转发 → 重置门里精确 1 红且失败的是新增的链断言，逐入口循环仍绿（那条断言存在的理由）。L0 全套 78/78
 Cost     schema XML 没有 `gettext-domain` 属性（`metadata.json` 里那份只作用于 UI 串），所以**解释句在任何界面语言下都是英文**。写代码这一侧无法让它变成中文，除非批准 gettext 工具链或把说明复制进 `.ui`（后者正是本条要避免的债）。本机 LANG 为 en_US.UTF-8，看不出违和；中文界面下会混排 —— 待你在真实会话目视判断可否接受，需要注销重登（prefs 进程同样吃 GJS 模块缓存，L1 探针覆盖不到 prefs.js）
 Commit   9f1a6d6
+
+### D-049 · 2026-10-09 · chore · v48
+Symptom  资源清单里 4 个图标（copy-effects / paste-effects / window-open / window-close 的 `-symbolic.svg`）没有任何 shipped 文本指名：它们是给上游有、本 fork 没有的动作加的，却被编进 bundle 一起发出去
+Change   从 `resources/burn-my-windows.gresource.xml` 删这四行、删四个 `.svg`、`make` 重编译。中间态也被既有的 bundle 门抓住一次（只改清单、还没 `make` 时精确报出 "4 member(s) the manifest no longer lists … They are still shipped to users"）。5 个 PNG 与余下 5 个图标各自被特效 JS / shader / `prefs.ui` 指名，逐个查过，所以死资源只有这四个，没有连带清理
+Evidence 判"死"用了两条互相独立的依据：`grep -rIl` 全仓（排除 `.git` / `node_modules` / bundle 本体）只在清单里找到它们，`.mo` 二进制目录里 `grep -a` 也无命中；D-050 的门第一次跑列出**的正是这四个**。改后 `gresource list` 从 74 个成员变 70，`grep -c img/scalable/actions` 清单剩 5 行且 5 个都有人指名
+Cost     图标名是运行时按字符串查的（`prefs.js` 把 `/img` 注册进 IconTheme），所以"本仓文本里没有"不等于"没有任何东西查得到"—— 用户自己的 CSS 或第三方扩展理论上可以指名这几个图标。solo-use fork 接受这个前提；若上游日后重新用到它们，`git revert` 这一条即可
+Commit   c7bbb49
+
+### D-050 · 2026-10-09 · guard · v48
+Symptom  bundle 的两条既有门都只把 bundle 与**清单**对齐，没有一条把清单与"有没有人用"对齐。于是一个没人指名的图标照样编译、照样发货，而且删掉 `.ui` 里的引用也不会让任何检查变红 —— 上游升级带来新图标时，这一类债会重新积回来
+Change   `test/build-freshness.test.mjs` 新增一条：取清单里 `img/scalable/actions/` 的全部条目，剥掉目录与 `.svg` 得到图标名，在**我们会发出去的文本**里找一遍 —— `allJsSources()` 的字面量加上清单里每个 `.ui` 的正文。图标进控件只有这两条路（`.ui` 的 `icon-name` 属性，或 JS 传给 `new_from_icon_name()` 的串），所以能机械化，不像 shader 那样是拼串
+Evidence 该门第一次跑就红，并逐个列出四个名字（即 D-049 的结论被独立复现），而同一文件其余 6 条全绿。两次注入（各在一个全新的 /tmp 副本里，做完即弃）：往清单加一个谁也不指名的图标 → 该门红且把名字列出来；把 filter 前缀改成匹配不到任何东西 → 该门仍然红，走的是"空集不能算通过"那条控制
+Cost     只覆盖 `img/scalable/actions/`。PNG / shader / `.ui` 三类不在范围内：它们的引用是运行时路径与拼串（`/shaders/${nick}.frag`），按字面量查名字会一片假红。扩大范围需要另找依据，不在本轮
+Commit   c7bbb49
+
+### D-051 · 2026-10-09 · taste · v48
+Symptom  偏好窗口的四处归属位（菜单 `homepage` / `bugs`，About 的 `set_website` / `set_issue_url`）都指向上游仓库，而 `metadata.json` 的 `url` 早在导入时就是本 fork —— 用户按界面提示报障，issue 落在没有这份代码的 tracker 里
+Change   四处指回 fork。分界线写进注释：**代码在哪维护**归本 fork，**特效谁写的、钱与翻译队列在哪**归上游。`set_developer_name` / `set_copyright('© 2023 Simon Schneegans')` / license / 四个 donate-* / `show-sponsors` / `translate`（Weblate）/ `new-effect` / `wallpapers` 全部不动，`metadata.json` 的 donations 段也不动（Q5 捐赠保留原样）
+Evidence 新增的门（D-052）先写、代码未改时 5 条里 2 红，且失败消息把期望地址与实际地址都打出来；三条控制当场绿
+Cost     这是一次**归属**改动，不是修复：上游 issue 页对 upstream v48 原样安装的用户仍然是对的。若本 fork 哪天不再维护，这四处要一起改回去，门会指着 README 的那一行说为什么
+Commit   b64beb7
+
+### D-052 · 2026-10-09 · guard · v48
+Symptom  D-051 这种"两个答案容易写成一个"的改动，最容易的回归是把上游仓库名整串替换掉 —— 于是捐赠页也变成 fork、署名也换成本仓库，而这两种错在界面上都看不出来。要一条门同时守住"指回来"和"不许顺手多指"两个方向
+Change   新增 `test/prefs-attribution.test.mjs`（5 条）。**期望地址不在测试里重复一遍**：fork 取自 README 的 `git clone https://github.com/<owner>/<repo>.git` 行，上游 owner 取自 `**Upstream:** [..](https://github.com/<owner>/<repo>)` 行 —— README 是用户读的那份，测试里再抄一份 URL 就是等着漂移的一处。署名比对 owner 段而不是某个人的名字，换人不必改门
+Evidence 三次注入各命中该守的一半（每个副本只放一种变异；第一版脚本想用 `cp` 恢复，撞上这里 `cp` 是交互别名、提示没答上就没恢复，导致后两次跑在上一次的污染状态上 —— 换成每次新建干净副本后结论才干净）：整串替换 → 只红"钱与翻译队列留在上游"与"归属编辑只在这四处"；只改 `set_copyright` / `set_developer_name` → 只红署名那条；只把 `set_website` 留回上游 → 红"报障去处"与"四处"两条。另有一条防自证的控制：fork 地址必须与上游地址不同，否则其余各条会"构造上成立"
+Cost     门读 README 的两行格式，改写 README 那一节时必须保住 `git clone …\.git` 与 `**Upstream:** [..](https://github.com/…)` 的形状，否则门红在"取不到地址"上而不是红在归属上。本轮刻意**没有**把 `changelog` 动作纳入断言：它仍打开上游的 changelog，是否改成本仓库 `CHANGELOG.md` 尚未拍板（见 MAINTENANCE.md 的「已知不修 / 待确认」），加门等于替这个决定做掉
+Commit   b64beb7

@@ -320,9 +320,15 @@ GType 是否稳定、disable 后有没有残留、dispose 竞态会不会抛、�
 - `src/Shader.js:215` 的 `match.index` 没有 null 检查：`.frag` 若不含 `void main(){…}` 就
   在构造期抛 TypeError。当前 26 个 `.frag` 全部由探针 02 证明可编译，所以它是**潜在**问题，
   影响是"新增一个写错的 `.frag` 时报错位置难读"，不参与本轮修复。
-- 偏好对话框的 About 与"每开 10 次提示一次"的捐赠弹窗仍指向上游作者（`prefs.js:379-400`、
-  `:490-501`），而 `metadata.json:url` 指向本 fork。上游署名与许可证头**一律保留**；
-  About 的归属与 website/issues 指向要不要改成本仓库，属于设置页方案的一部分，未拍板前不动。
+- 偏好对话框的 About 与"每开 10 次提示一次"的捐赠弹窗**仍属于上游**（`set_developer_name`、
+  `set_copyright`、license、四个 `donate-*`、`show-sponsors`、`translate` 与 `metadata.json:donations`
+  一概不动），而**报障去处**（菜单 `homepage` / `bugs`，About 的 `set_website` / `set_issue_url`）
+  已指回本仓库，与 `metadata.json:url` 一致。两个方向都有门守着：`test/prefs-attribution.test.mjs`
+  从 README 的 `git clone` 行与 `**Upstream:**` 行取期望地址，所以改写 README 那两行的**形状**
+  会让它红在"取不到地址"而不是红在归属上。详见 CHANGELOG 的 D-051 / D-052。
+- **`changelog` 动作仍打开上游的 `docs/changelog.md`**，而扩展版本变化后弹出的 toast 引导用户去读的
+  正是它；本 fork 的变更记在本仓库 `CHANGELOG.md`。Q4 只批了 website/issues 两处，改这条属于扩大
+  范围，**待你决定**。本轮也没有为它加门 —— 加了就等于替这个决定做掉。
 - 沙箱里 `gjs` GTK4 客户端只证明"能开窗、能关窗、动画被接管"，不证明 GTK 应用在你机器上的其他行为。
 - **文档路由门不区分正文与引文**：它扫每一行 markdown 里的节号引用，所以**举一个坏例子也会被当成一次
   真引用**并让门变红。规避办法是要么在引文里不写节号，要么让引文里的节号紧挨它自己的文件名；
