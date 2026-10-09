@@ -96,6 +96,32 @@
 			JSON.stringify(setupCalls));
 		H.chk('easeHandedBack', actor.ease === originalEase ? true : 'the override did not restore ease()');
 
+		// The issue-335 fallthrough on the engine's own frames. A resize which lands
+		// before the real animation must reach the shell's ease() and leave the override
+		// pending -- but the *next* takeover then has to reuse the shell original it
+		// stored the first time. Reading `actor.ease` back would read the pending closure,
+		// growing a chain of them: one retained effect per takeover, and an old closure
+		// which still fires on animations the fork chose to delegate.
+		inst._settings.set_string('preview-effect', 'glide');
+		await H.sleep(200);
+		const chain = { meta_window: H.mkMetaWindow(), ease() { return 'stock ease'; } };
+		const chainOriginal = chain.ease;
+		(function _mapWindow() { Main.wm._shouldAnimateActor.call(Main.wm, chain, 1); })();
+		const resizeResult = (function _resizeAfterMap() { return chain.ease({ duration: 200 }); })();
+		H.chk('fallthroughReachesStockEase', resizeResult === 'stock ease' ? true :
+			`a resize ease() call gave ${JSON.stringify(resizeResult)} instead of the shell ease()`);
+		H.chk('fallthroughStaysPending', chain.ease !== chainOriginal ? true :
+			'the override was dropped on the resize, so the real animation would never be intercepted');
+
+		setupCalls.length = 0;
+		(function _destroyWindow() { Main.wm._shouldAnimateActor.call(Main.wm, chain, 1); })();
+		(function _destroyWindow() { chain.ease({ duration: 500, opacity: 0 }); })();
+		H.chk('fallthroughSetupsOnce', setupCalls.length === 1 ? true :
+			`the animation was set up ${setupCalls.length}x -- a stale closure created another effect`);
+		H.chk('fallthroughHandsBackShellEase', chain.ease === chainOriginal ? true :
+			'ease() came back as a stale closure, which keeps the chain alive for the actor lifetime');
+		H.metric('probeInducedFallthroughs', inst._easeFallthroughs);
+
 		// Negative control: a caller on neither path (minimise, resize, ...) must reach
 		// the original untouched. Without this, "returns true" could be unconditional.
 		// The shell's real _shouldAnimateActor dereferences actor.get_texture(), which a

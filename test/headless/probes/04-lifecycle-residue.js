@@ -29,6 +29,24 @@
 		H.chk('signalIdsExist', signalCountOne > 0 ? true :
 			`no per-profile handlers were registered at all (${signalCountOne}) -- the leak meter below is blind`);
 
+		// A window actor which still carries the extension's *own* ease() override is
+		// residue the eight patch restores cannot reach: that override is installed per
+		// actor and is only handed back when it meets a real window animation, so one can
+		// outlive disable(). Reaching that state for real means winning the map-then-resize
+		// race, which this harness cannot drive (`_chooseEffect()` declines an
+		// already-mapped actor, so a manual call delegates instead of claiming). The
+		// pending state is therefore manufactured here -- probe 03's fallthrough cases show
+		// the fork itself producing exactly this shape on real engine frames. What is
+		// genuinely under test is the walk: live window actors, the marker read, and the
+		// hand-back.
+		const opened = await H.withWindow(Main, '04-pending-override');
+		const burned = opened.win.actor;
+		const shellEase = burned.ease;
+		burned._bmwEaseOriginal = shellEase;
+		burned.ease = function pendingOverride() { return 'extension override'; };
+		H.chk('pendingOverrideWasPending', burned.ease !== shellEase ? true :
+			'the manufactured override is not distinguishable from the shell ease() -- the check below is vacuous');
+
 		// ------------------------------------------------------------ disable residue
 		// The instance's own disable(), not EM._callExtensionDisable(): the latter is not
 		// the counterpart of _callExtensionEnable and left everything installed -- the
@@ -51,6 +69,10 @@
 		const stuck = restored.filter(([, ok]) => !ok).map(([n]) => n);
 		H.chk('allEightPatchesRestored', stuck.length === 0 ? true :
 			`still patched after disable(): ${stuck.join(', ')}`);
+
+		H.chk('pendingOverrideTakenBack', burned.ease === shellEase ? true :
+			'a live window actor still carries the extension ease() override after disable()');
+		H.closeWindow(opened);
 
 		H.chk('profileHandlersReleased', inst._profileSignalIds.length === 0 ? true :
 			`${inst._profileSignalIds.length} settings handler(s) survive disable()`);
