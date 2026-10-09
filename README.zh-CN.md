@@ -57,6 +57,88 @@ rm -rf ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 
 打开 **GNOME 设置 → 扩展 → Burn My Windows → 设置**。在预览列表中选择特效，再调整其参数。可创建配置档，将特效限定到特定应用、窗口类型或电源状态。
 
+## ⚙️ 偏好设置
+
+- **全局：** 当前配置档、预览特效、测试模式。
+- **单特效：** 启用开关、动画时长及特效专属参数（颜色、缩放、速度等）。
+- **配置档：** 按应用、动画类型、窗口类型、配色方案、电源模式与电源配置档匹配。
+
+偏好对话框写两个地方。全局键落在 dconf 的 `/org/gnome/shell/extensions/burn-my-windows/`；
+**每个配置档是一个独立的 keyfile**——`~/.config/burn-my-windows/profiles/<微秒时间戳>.conf`，
+组名 `[burn-my-windows-profile]`。配置档不是"要先手动激活的预设"：扩展是**逐个窗口**挑一个来用。
+
+**怎么选配置档。** 一个配置档上的所有约束必须同时成立；在所有命中的配置档里取优先级最高的，
+再从它**已启用**的特效里随机取一个。优先级是算出来的，不是手工排序：
+
+| 条件 | 加分 |
+|---|---|
+| 配置档的**高优先级**开关 | +100 |
+| **Application** 一栏非空 | +10 |
+| 动画类型 / 窗口类型 / 配色方案 / 电源模式 / 电源配置档 中每一个不是"任意"的 | +1 |
+
+若无任何配置档命中，或命中的那个一个特效都没启用，窗口就走 GNOME 原生动画。只有普通窗口和
+对话框会有特效——面板、dock、桌面永远不会。
+
+**每个约束在比什么。**
+
+| 下拉项 | 取值 | 比对对象 |
+|---|---|---|
+| Application | 自由文本，用 `|` 分隔 | 窗口的 `WM_CLASS`，统一转小写后按**整串相等**比较：`fire` 匹配不到 `firefox`。旁边的拾取按钮可以替你填好 |
+| Animation Type（动画类型） | 任意 / 打开窗口 / 关闭窗口 | 这个窗口正在 map 还是 unmap |
+| Window Type（窗口类型） | 任意 / 普通窗口 / 对话框窗口 | normal 与 dialog / modal-dialog |
+| Color Scheme（配色方案） | 任意 / 默认配色 / 深色配色 | GNOME 的 `color-scheme`，即 `default` 与 `prefer-dark`；每次动画各读一次，所以跟随系统主题可用 |
+| Power Mode（电源模式） | 任意 / 使用电池 / 外接电源 | UPower 的 `OnBattery`；**没有 UPower 时按"外接电源"处理** |
+| Power Profile（电源配置档） | 任意 / 省电 / 平衡 / 性能 / 省电或平衡 / 平衡或性能 | `org.gnome.PowerProfiles` 的 `ActiveProfile`；**该守护进程不在时，受限的配置档不会命中** |
+
+**预览与测试模式。** 预览无视约束，直接用你正在编辑的那个配置档，而且只在窗口**打开**时播——
+下一次任意窗口关闭时这个请求就被清掉。测试模式把每段动画钉在 8000 ms 并锁住随机种子，好让截图可复现；
+它是给测试脚手架用的，不是日常设置，用完请关回去。
+
+## 🛠️ 故障排查
+
+**改了 `.js` 却没变化。** 禁用再启用扩展**不会**重新导入模块——缓存的 ESModule 保留旧代码。
+Wayland 上必须**注销并重新登录**。`scripts/reload.sh` 会重新编译、切换扩展、跟读日志，并在
+`extension.js` 或 `src/` 还有未提交改动时发出警告——而那正是"重载不可能已经生效"的情形。
+
+**动画完全不播。** 按顺序检查：
+
+1. **有没有**某个配置档至少启用了一个特效？新建的配置档只默认启用 `fire`。
+2. 那个配置档命中这个窗口了吗？约束是全 AND，而且窗口必须是普通窗口或对话框——见上面
+   **⚙️ 偏好设置**。
+3. 是不是设了应用约束？它比较的是完整的 `WM_CLASS` 串，写半截永远匹配不上。别手打，用拾取按钮。
+4. 测试模式是不是还开着？动画被钉死在 8 秒，看起来完全不是真实速度。
+
+把所有特效都关掉时，扩展是**故意**不再插手动画的：窗口 map 会等概览完全退场，与原生 GNOME 一致。
+
+**电池 / 电源配置档规则像是被无视了。** 这是写好的降级行为，不是检测失败：
+`org.gnome.PowerProfiles` 不在时，带 **Power Profile** 约束的配置档不会命中；UPower 不在时，
+**Power Mode** 约束按"外接电源"处理。一个受限的配置档绝不会靠一个验证不了的读数来命中。
+
+**看日志。** shell 进程和偏好对话框是两个不同的 journald identifier：
+
+```sh
+journalctl -f -o cat --identifier=/usr/bin/gnome-shell | grep -F '[burn-my-windows@local]'
+journalctl -f -o cat --identifier=org.gnome.Shell.Extensions | grep -iE 'burn-my|GJS|TypeError'
+```
+
+- `[burn-my-windows@local] expected <name> to be …` —— 某个 GNOME Shell 私有 API 在这个 GNOME
+  版本上变了。先跑 `./test/headless/run.sh 01`；被盯的符号清单在
+  [`docs/maintenance/shell-internal-api.md`](docs/maintenance/shell-internal-api.md) §5。
+- `[burn-my-windows@local] shader warm-up failed for <nick>` —— 该特效的着色器在空闲预热时被驱动
+  拒绝了。特效仍能用：着色器会在第一次真实动画时现建（一次小卡顿），预热会在配置档重载时重试。
+- 启用时报 `An object is already exported for the interface …`，说明在没有 `disable()` 的情况下
+  跑了第二次 `enable()`。这是上游行为，正常桌面流程走不到。
+
+**重置。** profile keyfile 是你唯一的一份成果，重置前先复制：
+
+```sh
+cp -a ~/.config/burn-my-windows ~/bmw-profiles-backup
+dconf reset -f /org/gnome/shell/extensions/burn-my-windows/   # 只影响全局键
+```
+
+删掉一个 profile 文件就是永久删除那个配置档，目前没有单档重置按钮。从"先禁用试试"到"干净重装"
+的分级回滚配方见 [MAINTENANCE.md](MAINTENANCE.md) §9。
+
 ## 🧪 测试
 
 三层，必须按顺序跑。完整手册——每层能证明什么、不能证明什么，以及回滚配方——在
@@ -80,12 +162,6 @@ npm run check && npm test          # L0 静态：秒级，不需要显示器
 L1 完全隔离：私有 D-Bus socket、`GSETTINGS_BACKEND=memory`、独立的
 `XDG_CONFIG_HOME` / `XDG_DATA_HOME` / `XDG_RUNTIME_DIR`；并且只要 `~/.config/dconf/user`、
 profile 目录与工作树与开跑前不是逐字节一致，它就拒绝报绿。
-
-## ⚙️ 偏好设置
-
-- **全局：** 当前配置档、预览特效、测试模式。
-- **单特效：** 启用开关、动画时长及特效专属参数（颜色、缩放、速度等）。
-- **配置档：** 按应用、动画类型、窗口类型、配色方案、电源模式与电源配置档匹配。
 
 ## 🆚 相对上游的改动（v48）
 下面每一项改动在 [CHANGELOG.md](CHANGELOG.md) 里有逐提交记录：kind、证据层级与提交号，

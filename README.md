@@ -57,6 +57,99 @@ rm -rf ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 
 Open **GNOME Settings → Extensions → Burn My Windows → Settings**. Pick an effect from the preview list, then tune its parameters. Create profiles to scope effects to specific applications, window types or power states.
 
+## ⚙️ Preferences
+
+- **Global:** active profile, preview effect, test mode.
+- **Per effect:** enable toggle, animation time and effect-specific parameters (colors, scale, speed, …).
+- **Profiles:** matching rules on app, animation type, window type, color scheme, power mode and power profile.
+
+The dialog writes two places. Global keys go to dconf under
+`/org/gnome/shell/extensions/burn-my-windows/`; **each profile is its own keyfile**,
+`~/.config/burn-my-windows/profiles/<microseconds>.conf`, group `[burn-my-windows-profile]`.
+A profile is not a preset you have to activate first — the extension picks one per window.
+
+**How a profile is chosen.** Every constraint on a profile has to hold at the same time, and among
+the matching ones the highest-priority profile wins; from it, one *enabled* effect is picked at
+random. Priority is computed rather than ordered by hand:
+
+| What | Contribution |
+|---|---|
+| the profile's **high priority** switch | +100 |
+| a non-empty **Application** field | +10 |
+| each of animation type / window type / color scheme / power mode / power profile that is not "Any" | +1 |
+
+If no profile matches, or the matching profile has no effect enabled, the window animates the native
+GNOME way. Only normal windows and dialogs get effects — panels, docks and the desktop never do.
+
+**What each constraint compares against.**
+
+| Dropdown | Values | Matched against |
+|---|---|---|
+| Application | free text, `|`-separated | the window's `WM_CLASS`, lower-cased, compared as a **whole string**: `fire` does not match `firefox`. The pick button fills it in for you |
+| Animation Type | Any / Opening Windows / Closing Windows | whether this window is mapping or unmapping |
+| Window Type | Any / Normal Windows / Dialog Windows | normal vs dialog / modal-dialog |
+| Color Scheme | Any / Default Color Scheme / Dark Color Scheme | GNOME's `color-scheme`, i.e. `default` vs `prefer-dark`; read per animation, so following the system theme works |
+| Power Mode | Any / On Battery / Plugged In | UPower's `OnBattery`; **with no UPower the fork reads "Plugged In"** |
+| Power Profile | Any / Power-Saver / Balanced / Performance / Saver or Balanced / Balanced or Performance | `org.gnome.PowerProfiles`' `ActiveProfile`; **if that daemon is absent, a constrained profile does not match** |
+
+**Preview and test mode.** Preview ignores the constraints and uses the profile you are editing, and
+it plays on window **open** only — the request is cleared on the next window close. Test mode pins every
+animation to 8000 ms and fixes the random seeds so screenshots stay reproducible; it exists for the
+test harness, not for daily use, so turn it back off.
+
+## 🛠️ Troubleshooting
+
+**I edited a `.js` file and nothing changed.** Disabling and re-enabling the extension does **not**
+re-import its modules — a cached ESModule keeps its old code. On Wayland this needs a
+**log out and log back in**. `scripts/reload.sh` rebuilds, cycles the extension, tails the log and
+warns when `extension.js` or `src/` still has uncommitted changes, which is precisely the case where
+a reload cannot have picked up your edit.
+
+**Nothing animates.** Work through these in order:
+
+1. Is at least one effect enabled in **some** profile? A fresh profile enables only `fire`.
+2. Does that profile match this window? Constraints are all-AND, and the window has to be a normal
+   window or a dialog — see **⚙️ Preferences** above.
+3. Is an application constraint set? It compares whole `WM_CLASS` strings, so a partial name never
+   matches. Use the pick button instead of typing.
+4. Is test mode still on? Animations are pinned to 8 seconds and look nothing like the real speed.
+
+With every effect switched off the extension deliberately stops touching animations, so window
+mapping waits for the overview to close exactly like stock GNOME does.
+
+**Battery or power-profile rules seem to be ignored.** That is the documented fallback, not a
+detection failure: a profile constrained on **Power Profile** does not match while
+`org.gnome.PowerProfiles` is absent, and a **Power Mode** constraint reads "plugged in" while UPower
+is absent. A constrained profile never gets to match on an unverifiable reading.
+
+**Reading the log.** The shell process and the preferences dialog are two different journald
+identifiers:
+
+```sh
+journalctl -f -o cat --identifier=/usr/bin/gnome-shell | grep -F '[burn-my-windows@local]'
+journalctl -f -o cat --identifier=org.gnome.Shell.Extensions | grep -iE 'burn-my|GJS|TypeError'
+```
+
+- `[burn-my-windows@local] expected <name> to be …` — a private GNOME Shell API moved under this
+  GNOME version. Start with `./test/headless/run.sh 01`; the list of watched symbols is
+  [`docs/maintenance/shell-internal-api.md`](docs/maintenance/shell-internal-api.md) §5.
+- `[burn-my-windows@local] shader warm-up failed for <nick>` — that effect's shader was rejected by
+  the driver during the idle pre-warm. The effect still works: its shader is built on the first real
+  animation (one small hitch) and the pre-warm retries when profiles are reloaded.
+- `An object is already exported for the interface …` on enable means `enable()` ran twice without a
+  `disable()` between them. That is upstream behaviour and normal desktop flows do not reach it.
+
+**Resetting.** Profile keyfiles are the only copy of your work, so copy them before resetting:
+
+```sh
+cp -a ~/.config/burn-my-windows ~/bmw-profiles-backup
+dconf reset -f /org/gnome/shell/extensions/burn-my-windows/   # global keys only
+```
+
+Deleting a profile file deletes that profile for good, and there is no per-profile reset button yet.
+For the rollback ladder — from "just disable it" to "clean reinstall" — see
+[MAINTENANCE.md](MAINTENANCE.md) §9.
+
 ## 🧪 Testing
 
 Three layers, always run in order. The full playbook — what each layer can and cannot prove
@@ -82,12 +175,6 @@ L1 is fully isolated: a private D-Bus socket, `GSETTINGS_BACKEND=memory`, scratc
 `XDG_CONFIG_HOME` / `XDG_DATA_HOME` / `XDG_RUNTIME_DIR`, and it refuses to report green
 unless `~/.config/dconf/user`, the profile directory and the working tree are
 byte-identical to before the run.
-
-## ⚙️ Preferences
-
-- **Global:** active profile, preview effect, test mode.
-- **Per effect:** enable toggle, animation time and effect-specific parameters (colors, scale, speed, …).
-- **Profiles:** matching rules on app, animation type, window type, color scheme, power mode and power profile.
 
 ## 🆚 Changes vs upstream (v48)
 
