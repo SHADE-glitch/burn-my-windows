@@ -464,8 +464,8 @@ Cost     its visible boundary must be stated, so the next session does not read 
 Commit   08e5227
 
 ### D-064 · 2026-10-10 · guard · v48
-Symptom  `STANDARD.md` §7 (machine-wide) requires every `.gitignore` to carry at least the runtime ignore list `.venv/ venv/ __pycache__/ *.db *.db-wal *.db-shm .pytest_cache/ reports/`. This repo carried `reports/`, `node_modules/` and the editor cruft, but none of the Python-tooling or database entries, so a stray `.venv/`, `__pycache__/` or `*.db` dropped beside the extension during testing would have shown up as untracked and been committable
-Change   Added the seven missing entries under a labeled block citing STANDARD §7. Every existing rule is left byte-identical: `node_modules/`, the `reports/` rule, and the NOTE that keeps the compiled `.gresource` / `gschemas.compiled` tracked on purpose
-Evidence L0: `git check-ignore -v .venv/x __pycache__/x.py foo.db .pytest_cache/x` now names `.gitignore` for all four paths (before the change none resolved); `node --test test/repo.test.mjs` 3/3; `npm run check:log` PASS
+Symptom  The machine-wide `STANDARD.md` (its runtime ignore list section) requires every `.gitignore` to carry at least the runtime ignore list `.venv/ venv/ __pycache__/ *.db *.db-wal *.db-shm .pytest_cache/ reports/`. This repo carried `reports/`, `node_modules/` and the editor cruft, but none of the Python-tooling or database entries, so a stray `.venv/`, `__pycache__/` or `*.db` dropped beside the extension during testing would have shown up as untracked and been committable
+Change   Added the seven missing entries under a labeled block citing `STANDARD.md`'s runtime ignore list. Every existing rule is left byte-identical: `node_modules/`, the `reports/` rule, and the NOTE that keeps the compiled `.gresource` / `gschemas.compiled` tracked on purpose
+Evidence L0: `git check-ignore -v .venv/x __pycache__/x.py foo.db .pytest_cache/x` now names `.gitignore` for all four paths (before the change none resolved); `npm test` 94/94; `npm run check:log` PASS
 Cost     The block is a rule, not a check — only `reports/` is pinned by `test/repo.test.mjs`, so the full list can still drift. No `.venv` or `*.db` is produced by this extension's tooling, so the entries are prophylactic
 Commit   bff0f2c
