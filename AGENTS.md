@@ -91,6 +91,12 @@ fork of Burn-My-Windows, used in place with no install step.
     dispose-race behaviour.
   - **L2** the real session, by eye. Smoothness, first-paint GLSL link cost, and whether
     an effect *looks* right are not determinable by any script.
+  - **AT-SPI cannot see inside a collapsed `Adw.ExpanderRow`.** Measured on the live preferences
+    window: every option-row title ("Animation time", "Tilt", "Speed") returns 0 nodes while all
+    26 header rows, their 26 preview buttons and 26 reset buttons are present. So an a11y walk can
+    prove *that a reachable row exists*, never that a subtitle or per-option widget rendered —
+    do not use it to check the runtime descriptions. For that, expand the row by eye, or load the
+    shipped `.ui` in a `Gtk.Builder` harness (`menus.ui` before `prefs.ui`, same builder).
 - `extension.js`, `prefs.js` and `src/` are all GI-bound, so they cannot be imported
   outside GNOME Shell. `test/patch-symmetry.test.mjs` therefore slices the two patch
   regions out of the source and runs them against mock shell objects. The slices are
