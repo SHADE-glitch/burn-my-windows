@@ -9,6 +9,17 @@
 # this; the rule only keeps one out of `git status` if it ever appears.
 node_modules/
 
+# Machine-wide runtime ignore list (agent-standards/STANDARD.md §7): Python
+# tooling and stray databases can land beside the extension during testing.
+# Keep them out of `git status`; never commit them.
+.venv/
+venv/
+__pycache__/
+*.db
+*.db-wal
+*.db-shm
+.pytest_cache/
+
 # Phase evidence for this maintenance fork: PROFILE / AUDIT / PLAN / VERIFY / STATE.
 # This repo is public and those files quote raw journal lines, window titles and
 # resolved temp paths, so they stay local-only. test/repo.test.mjs asserts this rule
