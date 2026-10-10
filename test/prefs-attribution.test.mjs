@@ -114,6 +114,40 @@ test('the money and the translation queue stay with upstream', () => {
   }
 });
 
+test('the changelog link points at a file this repository actually ships', () => {
+  // The other slots are plain repository URLs, so comparing host + repository is enough for them.
+  // This one is a *path inside* the repository (`/blob/<ref>/<file>`), and the file half is
+  // something we control: rename or drop `CHANGELOG.md` and every reader the update toast sent off
+  // lands on a 404. The ref half is deliberately not asserted -- a CI checkout has no reliable
+  // record of what the default branch is called (MAINTENANCE.md 的「已知不修 / 待确认」).
+  const url = changelogUrl();
+  const m = /\/blob\/([^/]+)\/(.+)$/.exec(url);
+  assert.ok(m,
+    `"${url}" is not a /blob/<ref>/<path> link into the repository, so there is no shipped file `
+    + 'for this check to resolve -- the changelog entry has to be a document this repo contains');
+
+  const [, ref, file] = m;
+  assert.ok(ref.length > 0 && file.length > 0,
+    `empty branch or path segment in "${url}"`);
+  assert.ok(!file.startsWith('/') && !file.includes('..'),
+    `"${file}" is not a path inside the repository, so reading it proves nothing about what we ship`);
+
+  let body;
+  try {
+    body = readRepo(file);
+  } catch (e) {
+    // readRepo throws at the filesystem here; name the link instead of letting a raw ENOENT stand in
+    // for the finding, because the finding is "the URL the toast opens no longer resolves".
+    assert.fail(`the changelog link sends the user to "${file}" on branch "${ref}", but the `
+      + `repository has no such file -- that page would 404 (readRepo said ${e.code || e.message})`);
+  }
+  assert.ok(body.length > 0,
+    `"${file}" exists but is empty -- the reader the toast sends off would see a blank page`);
+  assert.ok(/^# CHANGELOG/m.test(body),
+    `the changelog link resolves to "${file}", which has no "# CHANGELOG" heading -- the toast `
+    + 'promises a change log, not some other document');
+});
+
 test('the attribution edits stayed inside the five slots they belong to', () => {
   // One whole-menu sweep of `Schneegans` -> fork owner would also rewrite `new-effect`,
   // `wallpapers` and the donation pages, which document upstream's own work. Counting the
