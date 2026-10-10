@@ -68,11 +68,11 @@ const MOVED_MARKERS = [
   {file: COMPAT, section: 6, text: '`Clutter.Timeline.prototype.set_actor`'},
   {file: API, section: 5, text: '`Main.wm._shouldAnimateActor`'},
   {file: API, section: 7, text: '`Main.createLookingGlass()`'},
-  {file: API, section: 10, text: '按顺序做，别跳'},
-  {file: MEASURE, section: 8, text: '软件渲染（llvmpipe）与真实 GPU 不可比'},
-  {file: MEASURE, section: 12, text: 'v48，基线提交 `16ab10a`'},
+  {file: API, section: 10, text: 'Do them in order, and do not skip'},
+  {file: MEASURE, section: 8, text: 'Software rendering (llvmpipe) and a real GPU are not comparable'},
+  {file: MEASURE, section: 12, text: 'v48, baseline commit `16ab10a`'},
   // The probe 06 / 07 methodology block came out of §1 with §8 and §12.
-  {file: MEASURE, section: '1 的 06 / 07 小节', text: '`begin_work` / `end_work` 的"会话相等"不是有效不变量'},
+  {file: MEASURE, section: 'subsections 06 / 07 of §1', text: '`begin_work` / `end_work` "session equality" is not a valid invariant'},
 ];
 
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -513,8 +513,9 @@ describe('the maintenance runbook is still reachable after the split', () => {
     const sections = numberedSections(ROUTER);
     for (const n of KEPT_SECTIONS) {
       assert.ok(sections.has(n) && !sections.get(n).stub,
-        `${ROUTER} §${n} lost its body or was turned into a pointer — the 三十秒速查 / 三层验证 / ` +
-        '沙箱边界 / 日志 / 回滚 / 能证明什么 / 已知不修 sections are what this file is for');
+        `${ROUTER} §${n} lost its body or was turned into a pointer — the thirty-second quick ` +
+        'reference / three verification layers / sandbox boundaries / log / rollback / what headless ' +
+        'can and cannot prove / known-not-to-fix sections are what this file is for');
     }
     const numbers = [...sections.keys()].sort((a, b) => a - b);
     assert.deepEqual(numbers, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
