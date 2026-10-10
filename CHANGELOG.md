@@ -448,3 +448,10 @@ Change   `test/prefs-attribution.test.mjs` 加第 5 条：把链接拆成 `/blob
 Evidence 门先写、当场绿（当前 URL 解析到 `CHANGELOG.md`，读得到、有标题），然后**三次注入各命中同一断言而消息各不相同**（每次新建一个 /tmp 干净副本，跑完即删）：路径改成 `docs/changelog.md` → 红并打印 `sends the user to "docs/changelog.md" on branch "master", but the repository has no such file … ENOENT`；整条 URL 换成仓库根 → 红在 `"…" is not a /blob/<ref>/<path> link`；把副本里的 `CHANGELOG.md` 改名为 `CHANGES.md` 而**不动 URL** → 红回第一条消息（这一条是三注入里最值钱的，它证明判据真的落到了我们的树上，而不是只看字符串形状）。三次都只红这一条、其余 5 条照常绿。第一次跑批量注入脚本时第三例没输出（`ls -d` 却报残留 0），单独重跑一次才拿到结论——批量脚本"少打印"不等于"少执行"，得单独复核。L0 全套 **88/88**、`npm run check`、`check:log` 全绿
 Cost     断言读的是**工作树**，所以"文件在盘上但没提交"也算通过；要卡住未提交的发货得换成 `git ls-files`，本轮不扩这条范围。§13 那条现在准确了：已知无人守的只剩**分支名**一项，且人工核对是一条命令（`origin` 自本轮起是 SSH 地址，`git ls-remote --symref origin HEAD` 在本机直接可用）
 Commit   0688540
+
+### D-062 · 2026-10-10 · chore · v48
+Symptom  刚写完 D-061 就发现自己留下两处"文档在讲一条它自己不再执行的规则"。① `docs/maintenance/measurement.md` §12 的认证行说"认证之后**只应有记录这次认证的 docs 提交**"，可 D-061 这笔是 `test/` 里的门——照字面读，下一会话会以为出现了违规、进而去重跑一轮 L1，而那正是 D-059 刚用一次白跑否掉的行为。② §13 里我写"`origin` 自本轮起是 SSH 地址"：`origin` 用 https 还是 SSH 是**各人本机 config**，把这种事实写进会被别人读到的文档，等于给读者一条假承诺
+Change   ① 认证行改成只讲判据本身：**动到 `extension.js` / `src/` / `resources/shaders/` 才重跑**，其余（docs、`test/` 里的 L0 门、`prefs.js`、图标、`.ui`）都不构成重跑理由，并明说"认证之后落的多半正是这一类提交"。② §13 那句改成环境中立的表述：核对默认分支的命令是 `git ls-remote --symref origin HEAD`，**只有 remote 为 SSH 形态时它才有结果**（这台机器 https 形态连 `github.com:443` 静默挂死），并保留 2026-10-10 实测到的 `ref: refs/heads/master`
+Evidence 两处都是纯文本改动，`npm test` **88/88**（含 D-061 那条新门）、`npm run check`、`check:log` PASS；改前先用 `grep -n "此后只应有记录这次认证的 docs 提交"` 定位、改后再 grep 确认旧句已不在文件里。本机 remote 也已按用户指示切到 SSH 并双向验证：`git ls-remote --symref origin HEAD` 有结果（`ref: refs/heads/master` + tip sha），`git push --dry-run origin master` 回 `Everything up-to-date`（写路径通，且这次确实没有对象被推走）
+Cost     这是把我写的规则从"观察"改回"判据"，没有代码、没有可回退义务。**留一条给下一会话**：`origin` 的传输形态属于本机配置，任何入库文档都不许再依赖它；要写就写"SSH 形态可用、https 形态在本机静默挂死"这种两侧都真的说法
+Commit   097b424
