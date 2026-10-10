@@ -92,7 +92,8 @@ disable 后 8 处补丁身份相等、`_profileSignalIds` 与 profile 数成比�
 | L0 | `npm test` 全绿（门数与用例数以命令输出为准，别抄）；`npm run check` 覆盖 extension.js / prefs.js / src 全部 js |
 | L1 | 探针与 checks 数量由 `run.sh` 打印；单探针独占一次 shell 启动，冷启动约 20 s，`run.sh all` 实测 **3 分 22 秒 – 3 分 24 秒**（2026-10-09 两次分别计时，取命令前后 `date` 差值；同日还有更早的连跑未单独计时，不把它算进区间；7 次冷启动 + 26 个真窗口，探针增删后这个时长要重测） |
 | 跨次稳定性 | 探针 07 已跑**六轮**（2026-10-07 两轮、2026-10-09 四轮），每轮 3/3 判据全过。绝对计数四轮 36 / 36、两轮 35 / 36，`outstanding` 首尾出现过 0→0、-1→-1、0→-1 三种：**一致的是判定，不是数字**。第一版曾因 34/34 与 34/35 之间抖动而暴露断言无效 |
-| 最近一次完整认证 | 2026-10-09 23:28–23:31（**3 分 22 秒**），7 探针 103 checks 全 PASS（01/02/03/04/05/06/07 = 13/10/27/25/5/20/3），CRITICAL 0，零写入三哈希不变。被认证的工作树是 `aa02c96`；在它之后只应有**记录这次认证本身的那一个 docs 提交**，可用 `git diff --stat aa02c96..HEAD` 回读——里面若出现 `extension.js` / `src/` / `prefs.js` / `resources/` 任何一项，本行就得重跑重记 |
+| 最近一次完整认证 | 2026-10-09 23:28–23:31（**3 分 22 秒**），7 探针 103 checks 全 PASS（01/02/03/04/05/06/07 = 13/10/27/25/5/20/3），CRITICAL 0，零写入三哈希不变。**被认证的工作树是 `aa02c96`，它已过期**：之后的 `0e99c80` 改了 `prefs.js`，本行下面那条规则要求重跑。留在这里是为了"哪一次运行对应哪一棵树"可查，不是为了充当当前结论 |
+| 认证覆盖的是什么 | 七个探针全部跑在 **shell 进程**里，加载 `extension.js` 与 `src/`；`prefs.js` 与 `resources/` 里的图标、`.ui` 页面**不在其加载路径内**。所以 `prefs.js` 的改动不会让 L1 变红，L1 绿也不证明设置页 —— 那一层只有 L0 的静态门 + 本页 L2 行里的实机验证能说话 |
 | enable() 主线程阻塞 | 1 profile：4–6 ms；20 profiles：**29–46 ms**。2026-10-09 六次独立采样：46 / 30 / 29 / 35 / 31 / 33 ms。其中 46、31、33 来自 `run.sh all` 连跑，30 / 29 / 35 来自单跑 `run.sh 06` —— **连跑与单跑没有稳定的高低关系，不要把 46 归因于跑法**。`extension.js` 与 `src/` 自设置页那一轮开工前（`681c150`）起**逐字节未变**（`git diff --stat 681c150..HEAD -- extension.js src/` 实测为空），所以这段差是机器状态而不是代码。**这一项以前记的是单次采样值（6 ms / 35 ms），那正是它能骗人的方式** |
 | begin_work / end_work | 五条异常收尾路径全部归还着色器。**绝对计数会漂**：2026-10-09 三次 `run.sh all` 分别为 36/36（`outstanding` 0 → 0）、35/36（-1 → -1）、35/36（0 → -1），都 PASS —— 计数器是进程级的、gnome-shell 自己也在调用，所以差额可以是负的（shell 自己的 `end_work` 落在窗内多过一次）。**判据从来不是相等，而是 `probeDidNotWidenTheWorkGap`：结束时不得比开始时更宽**，外加"每场景同时在飞数 ≤ 2"（`noUnboundedWorkAccumulation`）；把"36 / 36"当基线抄进文档就是把它当判据 |
 | 动画路径总线 | 首个**非预览**动画会构造 UPower 代理（沙箱 135 µs），之后 `OnBattery` 读本地缓存：gjs 1.88 实测 50 次读共 634 µs（≈13 µs/次，代理 `flags==0` ⇒ GIO 自持 PropertiesChanged 订阅）。有电源约束时第一次 **2.8–7.6 ms**（2026-10-09 六次独立采样：2791 / 3156 / 3304 / 4186 / 4197 / **7639** µs —— 中位约 3.2 ms，最高那次没有任何代码变化可以解释，只能是这台机器当时的状态；60 Hz 一帧是 16.7 ms，所以尾值已接近三成帧预算），之后 28–149 µs |
@@ -100,6 +101,8 @@ disable 后 8 处补丁身份相等、`_profileSignalIds` 与 profile 数成比�
 | L1 观测值 | 着色器 26 个 GType、两轮往返约 140 ms；探针 05 每特效 70–73 帧 |
 | 每 profile 的 settings handler | 8（`_profileSignalIds` 的长度就是泄漏计数） |
 | 已验证平台 | Ubuntu 26.04.1 / GNOME Shell 50.1 / gjs 1.88 / Wayland，2026-10-01 |
+| 最近一次 L2 实机验证 | 2026-10-10 08:03 之后的真实会话（注销重登）。**prefs 侧覆盖率用三种独立方法对上了同一个数**：反射 schema 得 152 条可用说明、扣 26 个开关与 11 条 `description == summary` → 预测 126 行；`Gtk.Builder` 加载发货的 28 个 `.ui`（必须 `menus.ui` 先于 `prefs.ui` 进同一个 builder，否则 `main-menu` 引用不到——这是仪器问题不是产品缺陷）后，真 `_findRowFor` 解析出 137 个绑定键、**0 个找不到 `Adw.ActionRow`**，137 − 11 = 126。真控件跑真方法 8/8（含 `get_ancestor` 是真递归）。整段 boot 内我们前缀的告警 **0 条**、JS ERROR/TypeError/CRITICAL **0 条** |
+| prefs 进程已知噪声 | 每开一次偏好窗口打两条 `Type GITypeInfo of property Adw.PreferencesWindow::visible-page does not match …`。**不是本 fork 的**：全仓 `grep -rn visible-page prefs.js src/ extension.js` 为空，且不是我启动的 prefs 进程（08:15:16 那次）同样打这两条。发出方是 GNOME 自己的 `org.gnome.Shell.Extensions` 启动器。日志通道用 `--identifier=org.gnome.Shell.Extensions`（**不是** `gjs`） |
 
 > 运行期间**不要编辑工作树**：零写入证明比较的是开跑前后的 `git status --porcelain`，
 > 你在跑的同时改文件（哪怕与测试无关）会让它如实报"工作树被改动"并使该次运行作废。
