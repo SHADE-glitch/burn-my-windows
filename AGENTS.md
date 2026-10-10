@@ -3,6 +3,14 @@
 Guidance for agents working inside `burn-my-windows@local` — a local maintenance
 fork of Burn-My-Windows, used in place with no install step.
 
+> **Shared standard.** Root file names, the process-draft location (`docs/reports/`), the
+> `CHANGELOG` entry format, CI version pinning and entry commands, the test entry command, and
+> the runtime ignore list are defined once in the machine-wide `STANDARD.md` (outside this
+> repository) and are not restated here.
+>
+> **Push over SSH, never HTTPS.** Verify `git remote get-url --push origin` starts with `git@`
+> before pushing; if it starts with `https://`, fix it first — never push over HTTPS.
+
 ## Critical Rules
 - **Do not load ESModules via legacy `imports`** (e.g. `imports.ui.main` throws
   `SyntaxError` in GNOME 45+). Use static `import` or dynamic `await import()`.
@@ -191,7 +199,6 @@ fork of Burn-My-Windows, used in place with no install step.
   is enabled — read the result after every push.
 
 ## Docs & Commits
-- `README.md` and `README.zh-CN.md` are a **two-file bilingual pair** — edit both.
 - `MAINTENANCE.md` is a **router**. The three long-term assets live under `docs/maintenance/`:
   `docs/maintenance/shell-internal-api.md` (§5/§7/§10), `docs/maintenance/compat-matrix.md` (§6) and
   `docs/maintenance/measurement.md` (§8/§12, plus the probe 06/07 methodology split out of
@@ -202,11 +209,11 @@ fork of Burn-My-Windows, used in place with no install step.
   with English conventional-commit prefixes** — `feat:` / `fix:` / `perf:` / `guard:` / `test:` /
   `docs:` / `chore:`, optionally scoped (`fix(test):`). The list is what the history actually uses;
   a new prefix means updating this line, not inventing a near-synonym.
-- Phase evidence (`PROFILE` / `AUDIT` / `PLAN` / `VERIFY` / `STATE`) lives in `reports/`,
+- Phase evidence (`PROFILE` / `AUDIT` / `PLAN` / `VERIFY` / `STATE`) lives in `docs/reports/`,
   which is **gitignored and local-only**: the point is that raw journal lines, window
   titles and resolved user paths can be written down without ever reaching the public
   remote. `test/repo.test.mjs` guards both directions (the ignore rule exists, and nothing
-  under `reports/` is tracked). Start a new session by reading `reports/STATE.md`.
+  under `reports/` is tracked). Start a new session by reading `docs/reports/STATE.md`.
 - Nothing committed may depend on `reports/` contents: it is not in a clone, so a
   committed sentence citing it would be unverifiable for everyone else. Aggregate numbers
   in committed docs still come from commands, per § Recording conventions.

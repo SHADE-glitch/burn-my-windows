@@ -23,442 +23,442 @@ not fixed, which are not recorded here at all.
 ---
 
 ### D-001 · 2026-09-22 · fix · v48
-Symptom  `changed::active-profile` 处理器在 disable 后仍挂在 settings 上，重复 enable 会累积
-Change   disable 时断开该处理器
-Evidence L0 本轮重跑 `npm test`（patch-symmetry：`enable() then disable() leaves the shell exactly as it found it`）
-Cost     与 D-008 是同一类"处理器累积"，两处都要守住
+Symptom  the `changed::active-profile` handler stayed connected to settings after disable, so a repeated enable accumulated them
+Change   disconnect that handler on disable
+Evidence L0 reran `npm test` this round (patch-symmetry: `enable() then disable() leaves the shell exactly as it found it`)
+Cost     the same "handler accumulation" class as D-008; both must hold
 Commit   37eb5f8
 
 ### D-002 · 2026-09-22 · fix · v48
-Symptom  `_doEnable()` 中途抛错时留下半启用状态，之后既不能正常用也不能干净退出
-Change   抛错路径上回收已建立的部分状态
+Symptom  an error thrown midway through `_doEnable()` left a half-enabled state that could neither work nor exit cleanly
+Change   reclaim the partial state already built on the error path
 Evidence L?
-Cost     与 D-001、D-003 同一条 enable/disable 契约
+Cost     the same enable/disable contract as D-001 and D-003
 Commit   3d2a107
 
 ### D-003 · 2026-09-22 · fix · v48
-Symptom  迁移回调是异步的，`disable()` 之后仍会落地并写回已被释放的对象
-Change   回调执行前守卫"是否已被 disable"
+Symptom  the migration callback is async, so it still landed after `disable()` and wrote back to objects already released
+Change   guard "already disabled?" before the callback runs
 Evidence L?
-Cost     与 D-007 的 profile 迁移去重要一起看；异步续体未守卫是本仓反复出现的缺陷类
+Cost     read together with D-007's profile-migration dedup; an unguarded async continuation is a recurring defect class here
 Commit   3223773
 
 ### D-004 · 2026-09-22 · perf · v48
-Symptom  延迟启用等 4000ms，登录后长时间没有动画效果
-Change   缩短到 1000ms
+Symptom  deferred enable waited 4000 ms, leaving a long post-login window with no animation
+Change   shorten it to 1000 ms
 Evidence L?
-Cost     这是在"启动期别被拖慢"与"早一点可用"之间取值；改回大值会让 P0 一类的启动问题重新出现
+Cost     a trade between "don't slow startup" and "usable sooner"; restoring the large value brings the P0-class startup problem back
 Commit   2830ac4
 
 ### D-005 · 2026-09-22 · fix · v48
-Symptom  UPower 不可用时直接抛错，整扩展进入失败状态
-Change   改为容忍缺失（无守护就走无约束档）
+Symptom  when UPower was unavailable it threw outright, putting the whole extension into a failed state
+Change   tolerate the absence (no daemon → unconstrained profile)
 Evidence L?
-Cost     与 D-013 / D-022 是同一条电源档位判定链，三处必须一致
+Cost     the same power-tier decision chain as D-013 / D-022; all three must agree
 Commit   7323459
 
 ### D-006 · 2026-09-22 · chore · v48
-Symptom  `getUIDir`、`Shader._time`、`mushroom-8bit` 已无引用仍在树里
-Change   删除死代码与已停用的特效
-Evidence L0 本轮重跑 `npm test`（effect-registry：`all eight registration points hold the same 26 effects`、`enable switches and shaders are a bijection`）
-Cost     无行为变化；但注册点数量是 effect-registry 的判据，删特效必须八处同批
+Symptom  `getUIDir`, `Shader._time` and `mushroom-8bit` had no references left but stayed in the tree
+Change   remove the dead code and the retired effect
+Evidence L0 reran `npm test` this round (effect-registry: `all eight registration points hold the same 26 effects`, `enable switches and shaders are a bijection`)
+Cost     no behaviour change; but the registration-point count is effect-registry's criterion, so removing an effect must change all eight at once
 Commit   26dfe07
 
 ### D-007 · 2026-09-22 · fix · v48
-Symptom  特效里有两处潜在崩溃（当时未复现，代码可读出来）
-Change   加固这两处
+Symptom  two potential crashes in the effects (not reproduced then, but readable from the code)
+Change   harden both
 Evidence L?
-Cost     潜在崩溃没有测试能证，只能靠读；别把它当成"已被用例覆盖"
+Cost     a potential crash cannot be proven by any test, only read; do not treat it as "covered by a case"
 Commit   3169475
 
 ### D-008 · 2026-09-22 · fix · v48
-Symptom  重复加载 profile 时信号处理器不断累积，一次动画触发多个回调
-Change   停止累积
-Evidence L0 本轮重跑 `npm test`（patch-symmetry / sentinel-drift 的收支对称断言）
-Cost     与 D-001 同一类；累积的特征是"第一次没问题"，所以必须走重复路径才测得出
+Symptom  reloading profiles kept accumulating signal handlers, so one animation fired several callbacks
+Change   stop the accumulation
+Evidence L0 reran `npm test` this round (the balance assertions of patch-symmetry / sentinel-drift)
+Cost     the same class as D-001; accumulation looks fine the first time, so it takes a repeated path to catch
 Commit   0691b34
 
 ### D-009 · 2026-09-23 · fix · v48
-Symptom  纹理绑定回调里 pipeline 可能为 null，直接访问会抛
-Change   加 null 守卫
+Symptom  in a texture-binding callback `pipeline` can be null, and accessing it throws
+Change   add a null guard
 Evidence L?
-Cost     只在特定帧/特定特效下触发，L2 未验证
+Cost     only triggers on a specific frame / specific effect; not verified at L2
 Commit   5b1fd8d
 
 ### D-010 · 2026-09-23 · guard · v48
-Symptom  扩展全部生存能力压在 shell 私有接口上，一旦上游改名，失效是静默的
-Change   引入私有 API 哨兵（probing，只告警不拦截）
-Evidence L0 本轮重跑 `npm test`（sentinel-drift：`every patched method is also watched by the sentinel`、`the three probe families still hold what they hold today`）
-Cost     哨兵的判据是"能被人为触发一次"，不是"跑绿"；删哨兵等于把升级期的盲区请回来
+Symptom  the extension's whole survival rests on private shell interfaces; if upstream renames one, the failure is silent
+Change   introduce the private-API sentinel (probing: warn only, never block)
+Evidence L0 reran `npm test` this round (sentinel-drift: `every patched method is also watched by the sentinel`, `the three probe families still hold what they hold today`)
+Cost     the sentinel's criterion is "can be provoked once", not "runs green"; deleting it invites the upgrade-time blind spot back
 Commit   f4cba97
 
 ### D-011 · 2026-09-23 · perf · v48
-Symptom  每次判定电源档位都重新向 UPower 取值
-Change   缓存 UPower 结果
+Symptom  every power-tier decision re-queried UPower
+Change   cache the UPower result
 Evidence L?
-Cost     缓存要有失效边界，否则档位变化后不会响应（与 D-005 / D-022 的守护缺失语义联动）
+Cost     a cache needs an invalidation boundary, or tier changes go unanswered (linked to the missing-guard semantics of D-005 / D-022)
 Commit   f4cba97
 
 ### D-012 · 2026-09-23 · perf · v48
-Symptom  着色器首次使用时才编译，第一次动画明显卡
-Change   空闲期预热着色器
+Symptom  shaders compiled on first use, so the first animation stuttered noticeably
+Change   pre-warm shaders during idle
 Evidence L?
-Cost     预热的代价与收益本仓有实测记录（`docs/maintenance/measurement.md` §12，与 D-031）；它是否在启动期编译 GLSL 曾待确认
+Cost     the pre-warm's cost and benefit are measured in this repo (`docs/maintenance/measurement.md` §12, with D-031); whether it compiles GLSL at startup was once unconfirmed
 Commit   f4cba97
 
 ### D-013 · 2026-09-23 · fix · v48
-Symptom  UPower 守护缺失时，受约束的电源档仍然匹配上，等于档位形同虚设
-Change   守护缺失时不再匹配受约束档
+Symptom  with the UPower daemon absent a constrained power tier still matched, making the constraint meaningless
+Change   no longer match a constrained tier when the daemon is absent
 Evidence L?
-Cost     与 D-005、D-022 同一条链，D-022 是它的 P1-1 复审版本
+Cost     the same chain as D-005 and D-022; D-022 is its P1-1 re-review
 Commit   2b33e53
 
 ### D-014 · 2026-09-23 · perf · v48
-Symptom  已启用特效的枚举每次动画都重算
-Change   改为按 profile 缓存而非按动画
-Evidence L0 本轮重跑 `npm test`（effect-registry 的双射与八注册点断言保证缓存没把集合改小）
-Cost     缓存失效点必须与 profile 变更同步
+Symptom  the enabled-effect enumeration was recomputed on every animation
+Change   cache it per profile instead of per animation
+Evidence L0 reran `npm test` this round (effect-registry's bijection and eight-registration-point assertions prove the cache did not shrink the set)
+Cost     the cache invalidation point must stay in step with profile changes
 Commit   21de887
 
 ### D-015 · 2026-09-23 · perf · v48
-Symptom  特效预设每次 widget realize 都重建
-Change   每次 realize 只构建一次
+Symptom  effect presets were rebuilt on every widget realize
+Change   build them once per realize
 Evidence L?
-Cost     若日后允许运行时改预设，这条缓存要加失效路径
+Cost     if runtime preset edits are ever allowed, this cache needs an invalidation path
 Commit   a8d952f
 
 ### D-016 · 2026-09-23 · fix · v48
-Symptom  概览清理 clone 字段时不看归属，会把别的 clone 正在用的字段清掉
-Change   只清属于自己 clone 的字段
+Symptom  overview cleanup cleared clone fields without checking ownership, wiping fields another clone was using
+Change   clear only fields belonging to one's own clone
 Evidence L?
-Cost     跨 clone 互相踩状态是典型的"绿了还看不见"，回归要靠多窗口并行才暴露
+Cost     cross-clone state trampling is the classic "green and still invisible"; the regression only shows with parallel windows
 Commit   ba17312
 
 ### D-017 · 2026-09-23 · fix · v48
-Symptom  迁移被重试时 profile 会被重复追加
-Change   重试不再产生重复 profile
+Symptom  a retried migration appended the profile again
+Change   a retry no longer produces a duplicate profile
 Evidence L?
-Cost     与 D-003 同一条异步迁移路径
+Cost     the same async migration path as D-003
 Commit   bd1d45d
 
 ### D-018 · 2026-09-23 · perf · v48
-Symptom  启用走延迟路径，登录到可用之间有一段无动画窗口
-Change   改为同步启用，失败时退回延迟重试
+Symptom  enable went through the deferred path, leaving a no-animation window between login and usable
+Change   switch to synchronous enable, falling back to a deferred retry on failure
 Evidence L?
-Cost     **P0 类改动的风险方向**：主线程同步工作一旦变重就会拖坏启动。这条必须配合 MAINTENANCE §0 的速查判据复核，不能只看效果对不对
+Cost     **the risk direction of a P0-class change**: once main-thread synchronous work grows it wrecks startup. This must be re-checked against MAINTENANCE §0's quick-reference criterion, not just "does it look right"
 Commit   c9bf43b
 
 ### D-019 · 2026-09-23 · fix · v48
-Symptom  `meta_window` 可能为 null，访问即抛
-Change   加 null 守卫
+Symptom  `meta_window` can be null, and accessing it throws
+Change   add a null guard
 Evidence L?
-Cost     与 D-009 同一类"取窗口对象前先判空"
+Cost     the same "check for null before taking the window object" class as D-009
 Commit   038c903
 
 ### D-020 · 2026-09-23 · guard · v48
-Symptom  电源档位取样的时机与来源没有记录，读数无法解释自己
-Change   在代码里写明 power-state 采样方式（同笔提交的行为半边见 D-019）
+Symptom  the timing and source of the power-tier sampling were unrecorded, so the reading could not explain itself
+Change   write the power-state sampling method into the code (the behavioural half of the same commit is D-019)
 Evidence L?
-Cost     纯文档面；删掉它不会坏，只会让下一次误读变得可能
+Cost     purely documentation; deleting it breaks nothing, it only makes the next misreading possible
 Commit   038c903
 
 ### D-021 · 2026-09-23 · chore · v48
-Symptom  注释与别名书写不一致
-Change   统一注释与别名
-Evidence 不适用（无行为变化）
-Cost     无义务也无损失；升级时不构成任何判断依据
+Symptom  comments and alias spelling were inconsistent
+Change   unify comments and aliases
+Evidence N/A (no behaviour change)
+Cost     no obligation and no loss; it is no basis for any upgrade decision
 Commit   ec656c7
 
 ### D-022 · 2026-09-24 · fix · v48
-Symptom  P1-1：电源档位守护缺失时受约束档仍误匹配（D-013 的复审收口）
-Change   修正匹配条件，使守护缺失时只走无约束档
+Symptom  P1-1: with the power-tier guard missing a constrained tier still mismatched (D-013's re-review closure)
+Change   fix the match condition so a missing guard takes only the unconstrained tier
 Evidence L?
-Cost     判据来自审计编号 P1-1；改这条要重跑档位矩阵（`docs/maintenance/compat-matrix.md` §6 的 8 处兼容分支）
+Cost     the criterion comes from audit id P1-1; changing it means re-running the tier matrix (`docs/maintenance/compat-matrix.md` §6's 8 compatibility branches)
 Commit   c15a7a1
 
 ### D-023 · 2026-09-24 · chore · v48
-Symptom  P3-1：三处注释描述与 GNOME 50 的实际行为不符
-Change   按实测纠正注释
+Symptom  P3-1: three comments described behaviour that did not match GNOME 50
+Change   correct the comments per measurement
 Evidence L?
-Cost     错误注释比没有注释更贵——它是下一次误判的来源
+Cost     a wrong comment costs more than no comment — it is the source of the next misjudgement
 Commit   52dbe48
 
 ### D-024 · 2026-09-24 · perf · v48
-Symptom  `common.glsl` 每个特效实例都解码一次，预热一轮 1977µs
-Change   每进程只解码一次，降到 448µs（省 77%）
+Symptom  `common.glsl` was decoded once per effect instance; one warm-up round cost 1977µs
+Change   decode once per process, dropping to 448µs (77% saved)
 Evidence L?
-Cost     实测数字来自该次测量；换 GNOME 版本后要重量，不要沿用这里的值
+Cost     the measured figures are from that measurement; re-measure after a GNOME version change instead of reusing these values
 Commit   3ae5a8e
 
 ### D-025 · 2026-09-24 · perf · v48
-Symptom  `_warmShaders` 重复做 26 次同步读
-Change   复用 `enabledEffects`，N=20 时省 1.36ms
-Evidence L0 本轮重跑 `npm test`（effect-registry 保证复用集合仍完整）
-Cost     同上：数字是当时测的
+Symptom  `_warmShaders` repeated 26 synchronous reads
+Change   reuse `enabledEffects`, saving 1.36ms at N=20
+Evidence L0 reran `npm test` this round (effect-registry guarantees the reused set is still complete)
+Cost     as above: the numbers were measured then
 Commit   47170d0
 
 ### D-026 · 2026-09-24 · guard · v48
-Symptom  P1-2A：哨兵漏掉运行期私有 API 中"静态就能查出来"的那部分
-Change   补齐静态可查部分
-Evidence L0 本轮重跑 `npm test`（sentinel-drift：`the patch list matches the originals enable() captures`、`sentinel holders agree with the patch targets`）
-Cost     哨兵清单与补丁清单必须同步增删，单边改会立刻被 sentinel-drift 弄红
+Symptom  P1-2A: the sentinel missed the part of the runtime private API that is "statically checkable"
+Change   fill in the statically checkable part
+Evidence L0 reran `npm test` this round (sentinel-drift: `the patch list matches the originals enable() captures`, `sentinel holders agree with the patch targets`)
+Cost     the sentinel list and the patch list must be added to and removed from together; a one-sided change is caught immediately by sentinel-drift
 Commit   d396d31
 
 ### D-027 · 2026-09-24 · guard · v48
-Symptom  P1-2B：`WindowPreview` / `Workspace` 的实例字段没有被哨兵看着
-Change   补齐实例字段哨兵
-Evidence L0 本轮重跑 `npm test`（sentinel-drift：`the instance-field probe cannot touch the object it inspects`）
-Cost     同 D-026；实例字段是运行期才有，静态测试只能证明"探针写对了"，不能证明"上游没改"
+Symptom  P1-2B: the `WindowPreview` / `Workspace` instance fields were not watched by the sentinel
+Change   add the instance-field sentinels
+Evidence L0 reran `npm test` this round (sentinel-drift: `the instance-field probe cannot touch the object it inspects`)
+Cost     as D-026; instance fields only exist at runtime, so a static test can only prove "the probe is written correctly", not "upstream did not change"
 Commit   a58f3d6
 
 ### D-028 · 2026-09-24 · fix · v48
-Symptom  P3-2：`_doDisable()` 不释放 `_shellSettings`，每轮 enable/disable 泄漏一个对象
-Change   一并释放
-Evidence L0 本轮重跑 `npm test`（patch-symmetry 的 enable/disable 收支对称）
-Cost     泄漏属正确性问题，不按 perf 记
+Symptom  P3-2: `_doDisable()` did not release `_shellSettings`, leaking one object per enable/disable cycle
+Change   release it too
+Evidence L0 reran `npm test` this round (patch-symmetry's enable/disable balance)
+Cost     a leak is a correctness problem, not recorded as perf
 Commit   a83df30
 
 ### D-029 · 2026-09-24 · perf · v48
-Symptom  profile 匹配的约束在每次动画里重复求值，N=20 时每次动画 454µs（占一帧 2.72%）
-Change   约束预编译，降到 1µs
+Symptom  the profile-match constraints were re-evaluated on every animation; 454µs per animation at N=20 (2.72% of a frame)
+Change   precompile the constraints, dropping to 1µs
 Evidence L?
-Cost     这是热路径；数字是当时实测，升级后重量
+Cost     this is a hot path; the numbers were measured then, re-measure after an upgrade
 Commit   b8369df
 
 ### D-030 · 2026-09-24 · fix · v48
-Symptom  P1-3（审计外新发现）：end-animation 触碰已 dispose 的窗口 actor
-Change   结束动画路径不再访问已销毁 actor
+Symptom  P1-3 (newly found outside the audit): end-animation touched an already-disposed window actor
+Change   the end-of-animation path no longer accesses a destroyed actor
 Evidence L?
-Cost     访问已 dispose 对象在 GJS 里是运行时错误而非静默无效；这条只在动画被打断时触发
+Cost     accessing a disposed object in GJS is a runtime error, not a silent no-op; this only triggers when an animation is interrupted
 Commit   fdb2fcb
 
 ### D-031 · 2026-09-25 · chore · v48
-Symptom  A3：「预热是否编译 GLSL」长期挂在待确认，结论只存在于对话里
-Change   用实测数据收敛该条并写进文档（动了 src/ 的注释）
+Symptom  A3: "does the pre-warm compile GLSL?" sat in the to-confirm pile for a long time, its conclusion living only in conversation
+Change   settle it with measured data and write it into the docs (touched a comment in src/)
 Evidence L?
-Cost     这条的价值在"下次不必重测"；数据过期后要重新量，不要直接引用
+Cost     this is worth "not having to re-measure next time"; once the data is stale, re-measure instead of quoting it
 Commit   d581b3d
 
 ### D-032 · 2026-09-29 · guard · v48
-Symptom  8 处 shell 补丁里，install 侧与 restore 侧的守卫不对称：一边有、一边没有
-Change   install 与 restore 全部加守卫
-Evidence L0 本轮重跑 `npm test`（sentinel-drift：`both sides of every patch are guarded`；patch-symmetry：`enable() never invents a method that upstream no longer has`、`disable() never leaves a stub behind for a dropped method`）
-Cost     **半边守卫等于没有守卫**：不对称时恢复路径会把补丁永久留下
+Symptom  across the 8 shell patches the install-side and restore-side guards were asymmetric: one side had one, the other did not
+Change   add guards to both install and restore
+Evidence L0 reran `npm test` this round (sentinel-drift: `both sides of every patch are guarded`; patch-symmetry: `enable() never invents a method that upstream no longer has`, `disable() never leaves a stub behind for a dropped method`)
+Cost     **a one-sided guard equals no guard**: when asymmetric, the restore path leaves the patch installed forever
 Commit   1cc6722
 
 ### D-033 · 2026-09-29 · guard · v48
-Symptom  `prefs.js` 与 AuraGlow 的 `Gtk` / `Gdk` 导入未钉版本
-Change   钉 `?version=4.0`
-Evidence L0 本轮重跑 `npm test`（effect-registry：`both processes enumerate the same nicks`）
-Cost     钉版本让 GNOME 大版本变化在加载期就炸，而不是静默走错分支
+Symptom  the `Gtk` / `Gdk` imports in `prefs.js` and AuraGlow were not version-pinned
+Change   pin `?version=4.0`
+Evidence L0 reran `npm test` this round (effect-registry: `both processes enumerate the same nicks`)
+Cost     pinning makes a GNOME major change blow up at load time instead of silently taking the wrong branch
 Commit   d9f22a7
 
 ### D-034 · 2026-10-09 · fix · v48
-Symptom  issue 335 的 resize 分支只调用原始 `ease()` 而不摘掉覆写（上游刻意让它继续待命），于是下一次接管从 `actor.ease` 读到的"原始方法"其实是上一个闭包：每次接管多链一层闭包，各留住一个特效对象与其 profile 的 `Gio.Settings`；残留闭包还会在补丁主动让路的那次动画上凭空创建特效；`disable()` 之后它若再被触发，就在 `this._settings` 已为 null 时抛 TypeError，令 `_destroyWindowDone` 不再执行
-Change   原始 `ease()` 记在 `actor._bmwEaseOriginal` 上复用，不再读回自身；`_doDisable()` 遍历 window actors 回收待命覆写（只读自己的 expando，不碰已 dispose 的 GObject）；resize 分支透传 `ease()` 返回值并计数
-Evidence L0 本轮重跑 `npm test`（patch-symmetry 新增 `a resize fallthrough keeps the override pending but does not grow a chain`、`a delegated animation is not retroactively burned by an old closure`、`disable() takes back an ease() override that is still pending`；三条分别用「改回读 `actor.ease`」「删掉 `return`」「不遍历 actor」注入缺陷验出红）
-Cost     这三条路径此前没有任何门走过（`else` 分支与 disable 之后的闭包都是）。`_easeFallthroughs` 计数是为回答"GNOME 50 / Wayland 上这条到底走不走"，量完可撤
+Symptom  issue 335's resize branch only called the original `ease()` without removing the override (upstream deliberately left it armed), so the next takeover read the "original method" from `actor.ease` that was really the previous closure: each takeover chained one more closure, each retaining an effect object and its profile's `Gio.Settings`; the residual closure also created an effect out of thin air on the animation the patch deliberately delegated; after `disable()`, if it fired again, it threw a TypeError while `this._settings` was already null, so `_destroyWindowDone` stopped running
+Change   store the original `ease()` on `actor._bmwEaseOriginal` and reuse it instead of reading back off the actor; `_doDisable()` walks the window actors and reclaims any still-pending override (reading only its own expando, never a disposed GObject); the resize branch passes through `ease()`'s return value and counts it
+Evidence L0 reran `npm test` this round (patch-symmetry added `a resize fallthrough keeps the override pending but does not grow a chain`, `a delegated animation is not retroactively burned by an old closure`, `disable() takes back an ease() override that is still pending`; each of the three was red-verified by injecting a defect — "read `actor.ease` again", "drop the `return`", "do not walk the actors")
+Cost     none of these three paths had ever been covered by a gate (both the `else` branch and the post-disable closure). The `_easeFallthroughs` counter exists to answer "does this path ever fire on GNOME 50 / Wayland"; it can be removed once measured
 Commit   b174f69
 
 ### D-035 · 2026-10-09 · fix · v48
-Symptom  首个动画若撞上 logind / UPower 的启动竞态，`_upowerProxyChecked = true` 已在尝试之前置位且失败不再重试：`_upowerProxy` 整段会话为 null，`powerMode` 恒为 2，约束为"仅电池"的 profile 静默永不匹配，只有重新登录能恢复
-Change   构造拆成 `_tryUpowerProxy()` / `_tryPowerProfilesProxy()`；失败安排 30 s、最多三次的低优先级重试，且只在扩展仍启用时构造；动画热路径在失败之后不再有任何同步总线调用（重试调用幂等）；`_doDisable()` 取消定时器并清掉尝试锁，使 re-enable 能自己重头尝试
-Evidence L0 本轮重跑 `npm test`（`test/proxy-retry.test.mjs` 6 条：切出 5 个方法跑在 mock Gio / GLib 上，未修代码 / 不安排重试 / 去掉上界 / 删掉取消 / 热路径重建 / 去掉 `_settings` 守卫 六种注入各自验出红）；L1 探针 04 与 06 重跑 17 + 20 checks 全 PASS，CRITICAL 0
-Cost     缺席服务（台式机）上多至三次低优先级构造；90 s 窗口后放弃。测试用 `sliceMethod()` 按花括号配对切方法体，跳过字符串与注释 —— 这条工具顺带服务于后续门
+Symptom  if the first animation hit a logind / UPower startup race, `_upowerProxyChecked = true` was set before the attempt and the failure was never retried: `_upowerProxy` stayed null for the whole session, `powerMode` stayed 2, a profile constrained to "battery only" silently never matched, and only a re-login could recover
+Change   split construction into `_tryUpowerProxy()` / `_tryPowerProfilesProxy()`; on failure schedule a low-priority retry at 30 s, at most three times, constructing only while the extension is still enabled; after a failure the animation hot path makes no synchronous bus call (the retry call is idempotent); `_doDisable()` cancels the timer and clears the attempt lock so re-enable can try again from scratch
+Evidence L0 reran `npm test` this round (`test/proxy-retry.test.mjs`, 6 cases: five methods sliced out and run on mock Gio / GLib; six injections each red-verified — unfixed code / no retry scheduled / no upper bound / cancellation removed / hot-path rebuild / `_settings` guard removed); L1 probes 04 and 06 reran 17 + 20 checks all PASS, CRITICAL 0
+Cost     on a machine with no service (desktop) up to three low-priority constructions; gives up after a 90 s window. The test uses `sliceMethod()` to cut method bodies by brace matching, skipping strings and comments — a tool that incidentally serves later gates
 Commit   b38a1d0
 
 ### D-036 · 2026-10-09 · fix · v48
-Symptom  `disable()` 只把 `_ALL_EFFECTS` 置空：每个 profile 条目都持有一份该列表的**过滤副本**加自己的 `Gio.Settings`，26 个特效对象连同 shader 池与已解码纹理在整段禁用期间仍可达；`_resources` 留着已注销 bundle 的 2.5 MB 映射，两个 D-Bus 代理与 `_windowPicker` 照旧挂着；`PickWindow()` 每次 D-Bus 调用新建一个 `LookingGlass.Inspector` 且两个 handler 永不解除 —— 点 N 次"选择窗口"就有 N 个 inspector 存活，每个都回答下一次拾取
-Change   `_doDisable()` 释放 `_profiles`（空数组而非 null，让迟到读取降级为"不匹配"而不是抛异常）、`_resources`、两个代理、`_windowPicker`，`_killEffectsSignal` 断开后置零；`WindowPicker` 改成一个导出周期一个 inspector，`unexport()` 断开两个 handler 并交还对象
-Evidence L1 探针 04 本轮重跑 25/25（原 19，新增五条释放断言 + 一条 inspector 复用；沙箱里 LookingGlass 可用，未走 skip）。注入缺陷各自验红：删掉全部释放语句 → 20/25，改回每次新建 inspector → 24/25
-Cost     `_windowPicker` 置 null 后 re-enable 会重建 picker 并重新 `export()` 同一条对象路径 —— 上游这条路径曾因为重复导出而抛 "An object is already exported"（探针 04 的注释记着），本轮 `reenabled` 仍然 PASS，说明重建顺序是对的
+Symptom  `disable()` only emptied `_ALL_EFFECTS`: each profile entry held a **filtered copy** of that list plus its own `Gio.Settings`, so the 26 effect objects with their shader pools and decoded textures stayed reachable for the whole disabled period; `_resources` kept a 2.5 MB mapping of the unregistered bundle, the two D-Bus proxies and `_windowPicker` stayed attached as before; `PickWindow()` created a new `LookingGlass.Inspector` on every D-Bus call and the two handlers were never disconnected — clicking "select window" N times left N inspectors alive, each answering the next pick
+Change   `_doDisable()` releases `_profiles` (an empty array, not null, so a late read degrades to "no match" instead of throwing), `_resources`, the two proxies and `_windowPicker`, and zeroes `_killEffectsSignal` after disconnecting; `WindowPicker` becomes one inspector per export cycle, and `unexport()` disconnects both handlers and hands the object back
+Evidence L1 probe 04 reran 25/25 this round (was 19; five new release assertions + one inspector-reuse assertion; LookingGlass is available in the sandbox, no skip taken). Injecting defects red-verified each: deleting all release statements → 20/25, reverting to a new inspector each time → 24/25
+Cost     after `_windowPicker` is nulled, re-enable rebuilds the picker and re-`export()`s the same object path — upstream's path once threw "An object is already exported" on a duplicate export (noted in probe 04's comment); this round `reenabled` still PASSes, so the rebuild order is right
 Commit   cb06fa8
 
 ### D-037 · 2026-10-09 · fix · v48
-Symptom  `_warmedNicks.add(nick)` 在 `try` 之前、`catch (_e) {}` 不写日志：一次着色器被驱动拒绝就把该特效永久登记为"已预热"，从此不再重试，日志里查不到任何痕迹，而池子会在真正的动画路径上现建该着色器（正是预热要避免的 ~1.1 ms 卡顿）
-Change   只有成功才登记 `_warmedNicks`；失败按 `[burn-my-windows@local]` 前缀 + nick 警告一次，下一次 profile 重载重试；本次运行内的跨 profile 去重改用局部 `queued` 集合
-Evidence L0 本轮重跑 `npm test` 46/46（新增 `test/shader-warmup.test.mjs` 5 条：成功不重复 / 一个失败不结束队列 / 失败不登记且重试且有日志 / 同特效两 profile 只建一次 / 禁用后的源自退；「失败也登记」「仍然静默」「失败即结束」「去掉去重」四种注入各自验出红）；L1 探针 02 重跑 10/10，CRITICAL 0
-Cost     同一条提交把 `sentinel-drift` 的"恰好 5 处 warn"改成"任何 warn 都带前缀"的无边界不变式 —— 计数门在面对正当的新日志行时只会逼人删门。失败重试的代价是每次 profile 重载再试一次，不在动画路径上
+Symptom  `_warmedNicks.add(nick)` ran before the `try` and `catch (_e) {}` logged nothing: one driver rejection of a shader permanently registered that effect as "warmed", it was never retried, nothing in the log showed it, and the pool then built that shader on the real animation path (exactly the ~1.1 ms hitch the pre-warm exists to avoid)
+Change   register `_warmedNicks` only on success; on failure warn once with the `[burn-my-windows@local]` prefix + nick and retry on the next profile reload; the within-run cross-profile dedup now uses a local `queued` set
+Evidence L0 reran `npm test` 46/46 this round (new `test/shader-warmup.test.mjs`, 5 cases: success is not repeated / one failure does not end the queue / a failure is not registered and is retried with a log / two profiles of the same effect build once / the source retires after disable; four injections each red-verified — "register on failure too", "still silent", "failure ends the queue", "drop the dedup"); L1 probe 02 reran 10/10, CRITICAL 0
+Cost     the same commit changed sentinel-drift's "exactly 5 warn sites" into the boundary-free invariant "every warn carries the prefix" — a count gate only forces you to delete the gate when a legitimate new log line appears. The cost of failure retries is one more attempt per profile reload, off the animation path
 Commit   78e5c47
 
 ### D-038 · 2026-10-09 · chore · v48
-Symptom  `extension.js` 的电源采样注释宣称"轮询是故意的，为避免常驻 D-Bus 订阅"，`docs/maintenance/measurement.md` §12 记着"动画路径总线｜无约束 profile：0 次" —— 两条都是写下的而不是量出的
-Change   注释改成实测结论并注明条件；探针 05 增加 `easeFallthroughsNatural` 观测（本条不改行为）
-Evidence gjs 1.88 直接实测（同一个 `makeProxyWrapper` 调用路径 + 仓库里那份接口 XML）：代理 `flags == 0`（`G_DBUS_PROXY_FLAGS_NONE` ⇒ GIO 自己保留 PropertiesChanged 订阅维持缓存），50 次 `OnBattery` 读共 **634 µs**（≈13 µs/次）；shell 内同结论：探针 06 `constrainedChooseUs 3299 / 70 / 28`。探针 05 本轮重跑 5/5，`easeFallthroughsNatural = 0`（26 个真窗口各开合一次）
-Cost     `docs/maintenance/measurement.md` §12 那行在字面上不成立（首个非预览动画会构造代理，沙箱 135 µs），读取本身是本地缓存 —— 留给阶段 D 按本节改写。**据此不改代码**：13 µs 可忽略，把 `:909` 改成懒算只会在每次动画多扫一遍 profile。同时 D-034 那条分支的严重性由"当前故障"降为"潜在正确性"：GNOME 50 / Wayland 的 headless mutter 上普通窗口流量一次也没走到它
+Symptom  `extension.js`'s power-sampling comment claimed "polling is deliberate, to avoid a resident D-Bus subscription", and `docs/maintenance/measurement.md` §12 recorded "animation-path bus | unconstrained profile: 0 calls" — both were written down, not measured
+Change   rewrite the comment to the measured conclusion and state its condition; probe 05 gains the `easeFallthroughsNatural` observation (this entry changes no behaviour)
+Evidence direct measurement with gjs 1.88 (the same `makeProxyWrapper` call path + the interface XML in the repo): the proxy's `flags == 0` (`G_DBUS_PROXY_FLAGS_NONE` ⇒ GIO keeps its own PropertiesChanged subscription to maintain the cache), 50 `OnBattery` reads totalling **634 µs** (≈13 µs each); the same conclusion inside the shell: probe 06 `constrainedChooseUs 3299 / 70 / 28`. Probe 05 reran 5/5 this round, `easeFallthroughsNatural = 0` (26 real windows each opened and closed once)
+Cost     that `docs/maintenance/measurement.md` §12 line is literally false (the first non-preview animation does construct the proxy, 135 µs in the sandbox); the read itself is a local cache — left for phase D to rewrite per this section. **No code change on that basis**: 13 µs is negligible, and turning `:909` into a lazy computation would only scan the profile list once more per animation. Also, the severity of D-034's branch drops from "current bug" to "potential correctness": on headless mutter under GNOME 50 / Wayland with ordinary window traffic it never fired once
 Commit   1bfb768
 
 ### D-039 · 2026-10-09 · fix · v48
-Symptom  `Main.wm._waitForOverviewToHide` 只要扩展启用就被替换成"立刻返回"，与有没有特效无关 —— 把所有开关都关掉的用户拿不到原生行为，窗口会在概览还在退场时 map
-Change   改为按调用判断：`_anyEffectEnabled()` 读 `_loadProfiles()` 已缓存的 `enabledEffects`（每次调用不碰设置）。判断放在调用时而非 `enable()` 时，因为启用集合是在偏好窗口里改的，扩展全程保持启用
-Evidence L0 本轮重跑 `npm test` 49/49（`patch-symmetry` 新增 3 条：全关让路 / 有特效仍跳过（反向对照） / `_anyEffectEnabled` 的缓存语义；「恒不让路」「`some`→`every`」「恒返回 false」三种注入各掉 1 条）；L1 探针 01 13/13、03 **27**/27、04 25/25、07 3/3，CRITICAL 0，零写入三哈希不变
-Cost     **这是一次可感知的行为变化**：全关时窗口 map 时机回到原生（等概览退场）。若用户偏好原来的"永远不等"，回退本条即可，判据与守卫都在测试里
+Symptom  `Main.wm._waitForOverviewToHide` was replaced with "return immediately" whenever the extension was enabled, regardless of any effect — so a user who turned every switch off did not get native behaviour, and windows mapped while the overview was still hiding
+Change   decide per call: `_anyEffectEnabled()` reads the `enabledEffects` already cached by `_loadProfiles()` (no settings touched per call). The decision is made at call time rather than at `enable()` time, because the enabled set is changed in the preferences window while the extension stays enabled throughout
+Evidence L0 reran `npm test` 49/49 this round (`patch-symmetry` added 3: all-off delegates / effect-present still skips (reverse control) / `_anyEffectEnabled`'s cache semantics; three injections each dropped 1 — "never delegate", "`some`→`every`", "always return false"); L1 probe 01 13/13, 03 **27**/27, 04 25/25, 07 3/3, CRITICAL 0, zero-write three hashes unchanged
+Cost     **this is a perceptible behaviour change**: with everything off, window mapping returns to native timing (waiting for the overview to hide). If a user prefers the old "never wait", revert this entry; the criterion and the guards are both in the tests
 Commit   16a67db
 
 ### D-040 · 2026-10-09 · guard · v48
-Symptom  `MAINTENANCE.md` 一份 493 行的文件同时是 runbook（改之前跑什么、日志怎么读、怎么回滚）和三块长期资产（哨兵清单 / 兼容分支矩阵 / 观测判据与基线）。资产在 GNOME 大版本升级后被就地改写，"先跑什么"跟着一起漂。散文没有编译器：节号搬了家，`AGENTS.md`、本文件、探针注释里的 `§N` 引用照常存在、照常读起来像有依据，实际指向的只是一行路由
-Change   三块资产拆为 `docs/maintenance/` 三页，`MAINTENANCE.md` 降为路由：§0–§4 / §9 / §11 / §13 留正文，其余六节各留一行指针（§5 / §7 / §10 → `docs/maintenance/shell-internal-api.md`，§6 → `docs/maintenance/compat-matrix.md`，§8 / §12 → `docs/maintenance/measurement.md`），§1 的 06–07 方法学小节一并跟去 —— **节号沿用原编号不重排**。新增 `test/docs-links.test.mjs`（8 条）：markdown 相对链接与 `#锚点` 可达、`§N` 解析到它声称的文件且那里的标题不是路由行、移动过的节不得再按旧家（`MAINTENANCE.md` + `§N`）引用、每节恰好一行指针、移动内容在新文件**且**不在旧文件
-Evidence L0 `npm test` 57/57、`npm run check`、`npm run check:log` 全绿。搬运用逐行包含关系核对：新页与本文件共 51 行在旧文件里没有完全相同的形式，逐条确认为页首说明／路由行／`§N`→路径改写；旧文件有 9 行找不到孪生，同样逐条确认是这批改写，无一条是丢失的事实。变异在 `cp -a` 副本里做，工作树未受污染：整体移走 `docs/maintenance/` → 5 红（首条即"`compat-matrix.md` is missing"）；在 `AGENTS.md` 末尾追加一行旧家引用加一条断链 → 3 红（旧家引用、断链、两跳指针各掉一条）；每次还原后副本回到 57/57，`diff -q` 证明还原逐字节一致
-Cost     路由把一次升级要读的三张表换成三次跳转，换来的是"引用能解析"成为机器判据。**门只保证解析，不保证语义**：把 `docs/maintenance/measurement.md` §12 的实测值改成假数字，门仍然绿 —— 数值真伪归 `docs/maintenance/measurement.md` §8 的判据纪律，那一条不在这里。节号不重排是这套结构的长期负债：任何"顺手重排"会让 `AGENTS.md`、本文件与探针注释里的引用一起错位，而门只会报"解析不到"，不会报"这个号原本指的是别的"
+Symptom  `MAINTENANCE.md`, a single 493-line file, was at once a runbook (what to run before changing, how to read the log, how to roll back) and three long-term assets (sentinel list / compatibility matrix / observation criteria and baseline). The assets get rewritten in place after a GNOME major upgrade, and "what to run first" drifts along with them. Prose has no compiler: when a section number moves house, the `§N` references in `AGENTS.md`, this file and the probe comments still exist and still read as if they had support, while pointing at a mere router line
+Change   split the three assets into three pages under `docs/maintenance/`, demoting `MAINTENANCE.md` to a router: §0–§4 / §9 / §11 / §13 keep their body, the other six sections keep one pointer line each (§5 / §7 / §10 → `docs/maintenance/shell-internal-api.md`, §6 → `docs/maintenance/compat-matrix.md`, §8 / §12 → `docs/maintenance/measurement.md`), and §1's 06–07 methodology subsection moves along with them — **section numbers keep their original numbering, never reordered**. Added `test/docs-links.test.mjs` (8 cases): markdown relative links and `#anchors` are reachable, `§N` resolves to the file it names and that file's heading is not a router line, a moved section may no longer be cited by its old home (`MAINTENANCE.md` + `§N`), each section has exactly one pointer line, and moved content is in the new file **and** not in the old one
+Evidence L0 `npm test` 57/57, `npm run check`, `npm run check:log` all green. The move was checked by line-by-line containment: 51 lines shared between the new pages and this file had no byte-identical form in the old file, each confirmed as a page preamble / router line / `§N`→path rewrite; 9 lines in the old file had no twin, likewise each confirmed as part of this rewrite, none a lost fact. Mutations were done in a `cp -a` copy, the working tree untouched: moving `docs/maintenance/` away wholesale → 5 red (the first being "`compat-matrix.md` is missing"); appending an old-home citation plus a broken link to the end of `AGENTS.md` → 3 red (old-home citation, broken link, two-hop pointer, one each); after each restore the copy returned to 57/57 and `diff -q` proved the restore byte-identical
+Cost     the router trades the three tables you read on an upgrade for three hops, and buys "references resolve" as a machine criterion. **A gate only guarantees resolution, not semantics**: changing the measured value in `docs/maintenance/measurement.md` §12 to a fake number keeps the gate green — numeric truth is `docs/maintenance/measurement.md` §8's criteria discipline, not this. Not renumbering sections is this structure's long-term liability: any "tidy reordering" misaligns the references in `AGENTS.md`, this file and the probe comments at once, and the gate only reports "does not resolve", never "this number used to mean something else"
 Commit   0ea8a29
 
 ### D-041 · 2026-10-09 · guard · v48
-Symptom  文档路由门在自己新加的句子上误报：一句"§5 / §7 / §10 → `docs/maintenance/shell-internal-api.md`，§6 → `docs/maintenance/compat-matrix.md`"被判成后半句那一节不存在。原因是解析顺序与字符集两处：链式继承（"同一行的上一个引用"）被放在显式文件名之前，先抢走判据；`ATTACHED_BEFORE` 的粘连字符集里带着逗号与顿号，于是**前一句**的文件名能跨过逗号给下一个节号盖章 —— 后者更坏：一个属于上一句的路径可以给下一句的节号当依据，歧义写法被当成精确引用放行，而门存在的意义正是判据
-Change   把单条引用的解析抽成 `targetOfReference()`：粘连的文件名（写在号前或号后）优先于链式继承，逗号与顿号不再是粘连字符 —— 跨着逗号的名字不再给后面的节号盖章，那个节号按裸引用处理，于是落到路由并被"那是路由行"拒掉。新增第 9 条单元判据，用两个可判别 fixture 分别钉住这两条规则，并保留三条控制断言（纯连接词仍然继承、裸节号仍然回落路由、粘连的路径不是文件时必须失败并报出那个 token）
-Evidence L0 `npm test` 58/58。变异在 `cp -a` 副本里做，工作树未受影响：把继承分支挪回显式名字之前 → 1 红（新单元判据）；把逗号放回粘连字符集 → 2 红（新单元判据 + 真实 `CHANGELOG.md:300` 那条）；每次还原后 `node --test test/docs-links.test.mjs` 回到 9/9
-Cost     收紧粘连让一种过去静默通过的歧义写法变成红，**改的是引用写法而不是门**：`§N` 必须紧挨它自己的文件名（`docs/maintenance/measurement.md` §12），不能被逗号隔开。嫌太严就回退本条，代价是"名字属于上一句"的引用重新变成不可判定
+Symptom  the doc-router gate false-positived on its own newly added sentence: a sentence "§5 / §7 / §10 → `docs/maintenance/shell-internal-api.md`, §6 → `docs/maintenance/compat-matrix.md`" was judged to cite a section that does not exist for the second half. The cause was two things — parse order and character set: chain inheritance ("the previous reference on the same line") was placed before the explicit file name and stole the decision; and `ATTACHED_BEFORE`'s attachment character set contained the comma and the enumeration comma, so **the previous clause's** file name could reach across a comma and stamp the next section number — the latter is worse: a path belonging to the previous clause can serve as evidence for the next clause's section number, and an ambiguous spelling is let through as a precise citation, when the whole point of the gate is the criterion
+Change   extract single-reference parsing into `targetOfReference()`: an attached file name (written before or after the number) outranks chain inheritance, and the comma and enumeration comma are no longer attachment characters — a name across a comma no longer stamps the following section number, which is then treated as a bare reference, so it falls to the router and is rejected by "that is a router line". Added a 9th unit criterion, pinning both rules with two discriminating fixtures, and kept three control assertions (a pure joiner still inherits, a bare section number still falls back to the router, and an attached path that is not a file must fail and name that token)
+Evidence L0 `npm test` 58/58. Mutations in a `cp -a` copy, working tree unaffected: moving the inheritance branch back before the explicit name → 1 red (the new unit criterion); putting the comma back into the attachment character set → 2 red (the new unit criterion + the real `CHANGELOG.md:300` one); after each restore `node --test test/docs-links.test.mjs` returned to 9/9
+Cost     tightening attachment turns a previously silent ambiguous spelling red, **changing the citation style, not the gate**: a `§N` must sit right next to its own file name (`docs/maintenance/measurement.md` §12) and not be separated by a comma. If that is too strict, revert this entry, at the cost of "the name belongs to the previous clause" citations becoming undecidable again
 Commit   00906e9
 
 ### D-042 · 2026-10-09 · chore · v48
-Symptom  `docs/maintenance/measurement.md` §12 的"最近一次完整认证"停在 2026-10-07 的 89 checks，`enable()` 那行还写着 5 ms / 30 ms，总线那行写"第一次 4.4 ms（沙箱内 3299 µs）"—— 括号里的微秒与毫秒本来就不自洽（3299 µs 是 3.3 ms）。这些数字是抄来的，不是这一轮量出来的
-Change   把 `docs/maintenance/measurement.md` §12 换成 2026-10-09 那次认证的命令产出：7 探针 103 checks（01/02/03/04/05/06/07 = 13/10/27/25/5/20/3）、CRITICAL 0、零写入三哈希不变；`enable()` 6 ms / 35 ms；有电源约束的 `_chooseEffect()` 3191 / 89 / 29 µs；探针 07 begin/end 36/36 且 `outstanding` 1 → 0（原先写"首尾 outstanding 0"，现在把"收窄"这层判据说明白，因为判据是 `outstandingAtEnd <= outstandingAtStart`，不是相等）；全套耗时 3 分 24 秒，按 `$OUT` 产物时间戳跨度量得并注明量法
-Evidence L1 `./test/headless/run.sh all` 在提交 `95cb463` 的干净树上跑完，`RESULT: PASS`、退出码 0；逐探针计数取自 `$OUT/*.json` 的 `checks` 对象而不是终端回显（本轮第一次因为把输出接了 `tail -60` 而丢了前三道门，只能从产物回读）。工作树在运行期间零改动，运行结束后才开始编辑
-Cost     基线表里的绝对值只能在同一台机器上纵向比（判据见 `docs/maintenance/measurement.md` §8）。**本轮只换有出处的行**：没有重测的行留在原样，那不是它们错了，是它们还没被这一轮量过
+Symptom  `docs/maintenance/measurement.md` §12's "most recent full certification" was stuck at 2026-10-07's 89 checks, the `enable()` row still read 5 ms / 30 ms, and the bus row read "first time 4.4 ms (3299 µs in the sandbox)" — the microseconds and milliseconds in parentheses were already inconsistent (3299 µs is 3.3 ms). These numbers were copied, not measured this round
+Change   replace `docs/maintenance/measurement.md` §12 with the command output from the 2026-10-09 certification: 7 probes 103 checks (01/02/03/04/05/06/07 = 13/10/27/25/5/20/3), CRITICAL 0, zero-write three hashes unchanged; `enable()` 6 ms / 35 ms; power-constrained `_chooseEffect()` 3191 / 89 / 29 µs; probe 07 begin/end 36/36 with `outstanding` 1 → 0 (it previously said "outstanding 0 at both ends"; now the "narrowing" criterion is spelled out, because the criterion is `outstandingAtEnd <= outstandingAtStart`, not equality); full-suite time 3 min 24 s, measured across `$OUT` artifact timestamps with the method noted
+Evidence L1 `./test/headless/run.sh all` completed on the clean tree at commit `95cb463`, `RESULT: PASS`, exit 0; per-probe counts read from the `checks` object in `$OUT/*.json`, not from terminal echo (this round the first run lost the first three gates because the output was piped to `tail -60`, and had to be read back from the artifacts). The working tree had zero changes during the run; editing began only after it finished
+Cost     the absolute values in the baseline table can only be compared longitudinally on the same machine (criterion in `docs/maintenance/measurement.md` §8). **This round only replaced rows with a provenance**: rows that were not re-measured stay as they were — not because they were wrong, but because this round did not measure them
 Commit   e817c55
 
 ### D-043 · 2026-10-09 · guard · v48
-Symptom  C1–C6 在 `extension.js` 里增删了行，于是仓库里每一处 `extension.js:` 行号引用一起错位：文档表格、探针注释和一条 `H.rec` 文本里的行号现在指向无关代码，而它们读起来仍然像证据。`src/WindowPicker.js` 因 C3 的改动同样失效。没有任何门看得见这件事 —— 文档路由门只判链接与节号能否解析
-Change   机械重走每个锚点（脚本打印每条引用的目标行原文，逐条判定）：`src/Shader.js`、`src/utils.js`、`src/ShaderFactory.js`、`src/effects/Glide.js`、`src/migrate.js`、`prefs.js` 与各特效文件的引用本轮没有被改动过，核对为仍然正确；错位的是 `extension.js` 的四处（真位置 1006 / 1039 / 1105 / 1164 / 1264）、`src/WindowPicker.js`（真位置 56 / 65，另加 92 的 `closed` 处理器）和 `_preamble.js` 引的 `Shader.js:145`（读 `.width` / `.height` 的其实是 150 与 164）。**探针注释一律改成按符号定位**，行号只留在文档表格里；`docs/maintenance/shell-internal-api.md` §7 的 WindowPicker 行随之从"没有任何层覆盖"纠正为"半边覆盖"。AGENTS.md 收下这条规则与重走命令
-Evidence 改动全部落在注释与一条 `H.rec` 文本上：**探针 diff 里没有任何一行含 `H.chk` 或 `H.metric`**（对 `git diff -U0 test/headless/probes/` 的输出做正则检查，零命中），检查点一个没动，因此不为此重跑 L1。四个被改的探针各过 `node --check`；L0 `npm test` 58/58、`npm run check`、`npm run check:log` 全绿；剩余的 `extension.js:` 引用只有两条，`grep` 回读确认它们指向 1164 与 1264
-Cost     这条规则**没有门能守**：行号到符号的映射要靠人（或者一个本轮没写的解析器），判据就是那条 grep 加"打印目标行原文"的核对动作。写错的行号不会报错，只会伪装成证据 —— 这正是把它从注释里清出去的理由。回退本条不需要重跑任何测试，但注释会重新变成一次性用品
+Symptom  C1–C6 added and removed lines in `extension.js`, so every `extension.js:` line-number citation in the repo shifted together: the numbers in doc tables, probe comments and one `H.rec` text now point at unrelated code while still reading like evidence. `src/WindowPicker.js` was invalidated the same way by C3's change. No gate can see this — the doc-router gate only judges whether links and section numbers resolve
+Change   mechanically re-walk every anchor (the script prints the target line's text for each citation, judged one by one): the citations to `src/Shader.js`, `src/utils.js`, `src/ShaderFactory.js`, `src/effects/Glide.js`, `src/migrate.js`, `prefs.js` and the effect files were not touched this round and checked out as still correct; what had shifted were the four in `extension.js` (true positions 1006 / 1039 / 1105 / 1164 / 1264), `src/WindowPicker.js` (true positions 56 / 65, plus the `closed` handler at 92) and `Shader.js:145` cited by `_preamble.js` (the code reading `.width` / `.height` is really at 150 and 164). **Probe comments are now located by symbol throughout**, with line numbers kept only in the doc tables; `docs/maintenance/shell-internal-api.md` §7's WindowPicker row is corrected from "no layer covers it" to "half covered". AGENTS.md takes in this rule and the re-walk command
+Evidence all changes land in comments and one `H.rec` text: **no line in the probe diff contains `H.chk` or `H.metric`** (a regex check over `git diff -U0 test/headless/probes/` output, zero hits), not one checkpoint moved, so L1 was not re-run for this. Each of the four changed probes passes `node --check`; L0 `npm test` 58/58, `npm run check`, `npm run check:log` all green; the only remaining `extension.js:` citations are two, and a `grep` read-back confirms they point at 1164 and 1264
+Cost     this rule **has no gate that can hold it**: the line-to-symbol mapping needs a human (or a parser not written this round), and the criterion is that grep plus the "print the target line's text" check. A wrong line number does not error, it only masquerades as evidence — precisely the reason to clear it out of the comments. Reverting this entry needs no test re-run, but the comments become single-use again
 Commit   ff84a86
 
 ### D-044 · 2026-10-09 · guard · v48
-Symptom  用户手册开始按编号引用私有 API 清单与回滚配方，但文档路由门对覆盖范围只有一条整体要求（"至少 20 条节号引用"）。README 被 walk 跳过时它照样绿，于是这两处新引用处于无人看管状态
-Change   在节号解析那条门里加正向存在断言：README.md 与 README.zh-CN.md 必须在 markdown walk 里，且各自至少有一条节号引用被解析过
-Evidence `npm test` 58/58。两条断言都是"必须存在"的正向形式，所以 walk 一旦退化（目录被排除、正则失配）就变红，而不是安静地少扫一个文件。README 里现在被扫到的引用是 [`docs/maintenance/shell-internal-api.md`](docs/maintenance/shell-internal-api.md) §5 与 [MAINTENANCE.md](MAINTENANCE.md) §9
-Cost     这是**覆盖范围**的断言，不是内容正确的断言：它保证 README 被扫，不保证手册写的界面语义与 GNOME 一致。后者本轮是靠逐条回读代码得到的，见 D-045
+Symptom  the user manual began citing the private-API inventory and the rollback recipe by number, but the doc-router gate had only one global coverage requirement ("at least 20 section-number references"). If the README were skipped by the walk it would still be green, leaving these two new citations unguarded
+Change   add positive existence assertions to the section-number resolution gate: README.md and README.zh-CN.md must be in the markdown walk, and each must have at least one section-number reference resolved
+Evidence `npm test` 58/58. Both assertions are positive "must exist" forms, so if the walk ever degrades (a directory excluded, a regex failing to match) it goes red instead of quietly scanning one file fewer. The README citations now scanned are [`docs/maintenance/shell-internal-api.md`](docs/maintenance/shell-internal-api.md) §5 and [MAINTENANCE.md](MAINTENANCE.md) §9
+Cost     this is a **coverage** assertion, not a content-correctness one: it guarantees the README is scanned, not that the manual's UI semantics match GNOME. The latter came from reading the code back one by one this round, see D-045
 Commit   c8fb37f
 
 ### D-045 · 2026-10-09 · chore · v48
-Symptom  README 的偏好设置一节只列控件名，没有说明配置档是**怎么被挑中**的。用户看得见六个下拉项，却看不出四条会直接改变观感的行为：应用名要整串相等、电源配置档在守护进程缺失时**不会**命中而电源模式会读成"外接电源"、预览只在窗口打开时播、测试模式把动画钉在 8000 ms。故障排查同样无处可查：改了 `.js` 没反应、动画完全不播、电源规则像是被无视、日志分两个进程
-Change   双语 README 补两件事。偏好设置一节写明挑选机制：约束全 AND，优先级算出来（高优先级开关 +100、写了应用 +10、其余每个非"任意"的约束 +1），命中后从**已启用**特效里随机取一个，没有命中或一个都没启用就走原生动画，且只有普通窗口与对话框会有特效；再逐项列出每个下拉在比什么。新增故障排查一节：模块缓存与注销重登、动画不播的四步排查、两条电源降级是写好的行为、两条 journald identifier 与三类告警各意味着什么、重置顺序是先复制 `~/.config/burn-my-windows` 再 `dconf reset -f`。偏好设置整节移到"使用"之后，中英章节数与顺序保持镜像
-Evidence 每条说法都回读实现：`_chooseEffect()` 的约束链与两处电源降级、`ProfileManager.getProfilePriority()` 的加分、`_setupEffect()` 的 `duration = testMode ? 8000 : …`、schema 里 26 个 `-enable-effect` 只有 `fire-enable-effect` 默认 `true`（脚本数过）、预览由**下一次**窗口关闭清除（探针 03 的既有断言）。dconf 路径与 profile 文件名在本机回读确认（`dconf dump /org/gnome/shell/extensions/burn-my-windows/` 有 `active-profile`，profile 是 `~/.config/burn-my-windows/profiles/<微秒>.conf`）。L0 `npm test` 58/58，双语章节数一致由 `test/repo.test.mjs` 判
-Cost     文档写的是**当前实现的语义**，其中"约束全 AND""优先级算法"来自上游设计，本 fork 只改了电源分支的降级判定。**没有承诺任何还没做的东西**：单档重置按钮与一键恢复默认都不存在，所以文中明说"目前没有"。若阶段 B 加了重置入口，这一节必须同步改写
+Symptom  the README's preferences section listed only control names, without saying **how** a profile is chosen. Users can see six dropdowns but cannot see the four behaviours that directly change the look: the application name must match whole-string, a Power Profile constraint **does not** match when the daemon is absent while Power Mode reads "plugged in", preview plays only on window open, and test mode pins animations at 8000 ms. Troubleshooting had nowhere to look either: edited `.js` does nothing, nothing animates, power rules seem ignored, the log is two processes
+Change   add two things to the bilingual README. The preferences section now states the selection mechanism: constraints are all-AND, priority is computed (high-priority switch +100, an application written +10, each other non-"Any" constraint +1), one effect is picked at random from the **enabled** ones after matching, no match or none enabled falls to native animation, and only normal windows and dialogs get effects; then each dropdown's comparison is listed. Added a troubleshooting section: module caching and log-out/log-in, the four-step "nothing animates" check, the two power fallbacks being written behaviour, the two journald identifiers and what each of the three warning kinds means, and the reset order of copying `~/.config/burn-my-windows` before `dconf reset -f`. The whole preferences section moved after "Usage", with the English and Chinese section counts and order kept mirrored
+Evidence every claim was read back from the implementation: `_chooseEffect()`'s constraint chain and the two power fallbacks, `ProfileManager.getProfilePriority()`'s scoring, `_setupEffect()`'s `duration = testMode ? 8000 : …`, only `fire-enable-effect` defaulting to `true` among the schema's 26 `-enable-effect` (a script counted them), and preview being cleared by the **next** window close (probe 03's existing assertion). The dconf path and profile file name were read back on this machine (`dconf dump /org/gnome/shell/extensions/burn-my-windows/` has `active-profile`, profiles are `~/.config/burn-my-windows/profiles/<microseconds>.conf`). L0 `npm test` 58/58, and the equal bilingual section count is judged by `test/repo.test.mjs`
+Cost     the docs state the **current implementation's semantics**, of which "constraints are all-AND" and "the priority algorithm" come from upstream design; this fork changed only the power branch's fallback decision. **Nothing not yet done is promised**: a per-effect reset button and a one-click restore-default both do not exist, so the text says so. If phase B adds a reset entry, this section must be rewritten in step
 Commit   a6d792f
 
 ### D-046 · 2026-10-09 · fix · v48
-Symptom  `fillPreferencesWindow()` 里那段"在偏好窗口内部动手"的控件树手术逐条解引用查找结果：`header.pack_start(...)`、`clamp.get_parent()`、`viewport.get_parent().set_policy(...)`。那棵树不是 API，libadwaita 插一层容器就返回 null —— 而抛异常发生在对话框构建期间，后果是用户打不开**唯一能关掉这个扩展的窗口**。它跑在 prefs 进程里，shell 侧的 L1 探针结构上看不见
-Change   先证明搬运不改行为，再谈守卫：原语句**逐字**搬进 `_installWindowChrome(window)`，标题栏与配置档编辑器两半各自判空、互不牵连，失败各写一条带 `[burn-my-windows@local]` 前缀的 warn 并继续装另一半
-Evidence 新增 `test/prefs-window-chrome.test.mjs`（5 条）：跑**真的** `_findWidgetByType` 递归遍历与一棵可迭代的 mock 控件树。第一条"健康树两半都装上"在逐字搬运之后就已经绿，那正是它存在的理由（证明重构没改行为）；其余三条各缺一样东西（无 HeaderBar / 无 Clamp / viewport 没有上层 scroller），要求只掉对应那一半、不抛、且另一半仍然装上；第五条要求 prefs.js 的每条 `console.warn` 都带前缀。先红后绿：搬运完、尚未加守卫时 4 条红（TypeError 与"0 条 warn"）
-Cost     守卫把"崩溃"换成"降级 + 一条 warn"，不是修复：控件树真的换了形状时装饰会丢、对话框仍然开得住，warn 说得出是哪一半丢的。重做手术需要人工按 warn 定位，本轮没有承诺自动适配
+Symptom  the widget-tree surgery in `fillPreferencesWindow()` that "reaches inside the preferences window" dereferenced each lookup result one by one: `header.pack_start(...)`, `clamp.get_parent()`, `viewport.get_parent().set_policy(...)`. That tree is not an API, and libadwaita inserting one container returns null — and the exception happens while the dialog is being built, so the user cannot open **the only window that can turn this extension off**. It runs in the prefs process, structurally invisible to the shell-side L1 probes
+Change   first prove the move changes no behaviour, then talk about guards: the original statements were moved **verbatim** into `_installWindowChrome(window)`, the title bar and the profile editor each checked for null independently, and each failure writes one warn with the `[burn-my-windows@local]` prefix and continues installing the other half
+Evidence new `test/prefs-window-chrome.test.mjs` (5 cases): runs the **real** `_findWidgetByType` recursion against an iterable mock widget tree. The first case, "both halves install on a healthy tree", was already green right after the verbatim move, which is exactly why it exists (proving the refactor changed no behaviour); the other three each lack one thing (no HeaderBar / no Clamp / a viewport with no parent scroller) and require only the matching half to drop, no throw, and the other half still installed; the fifth requires every `console.warn` in prefs.js to carry the prefix. Red first, green after: right after the move, before adding guards, 4 red (TypeError and "0 warns")
+Cost     the guard replaces "crash" with "degrade + one warn", it is not a fix: if the widget tree really changes shape the decoration is lost and the dialog still opens, and the warn says which half was lost. Redoing the surgery means locating it by hand from the warn; this round promises no automatic adaptation
 Commit   cabdcd3
 
 ### D-047 · 2026-10-09 · taste · v48
-Symptom  偏好窗口已有 119 个逐选项重置按钮（`grep -o 'id="reset-' resources/ui/adw/*.ui` 数得），缺的是"这个特效被我调乱了"的一次撤销：用户要记得自己动过哪几项，逐条点回去
-Change   每个特效行加一枚 `edit-clear-symbolic` 圆按钮，调用 `_resetEffect(nick)`。键集合**不**靠"按 `<nick>-` 前缀扫 schema"得到：真实 profile schema 里 `tv-` 同时是 6 个 `tv-glitch-*` 键的前缀（9 个 `tv-*` 键里只有 3 个属于 tv），前缀扫会把另一个特效的选项一起清掉。改成在 `_loadActiveProfile()` 接线时用 `_bindingEffect` 标记当前特效，由唯一的汇聚点收下键，存成 per-effect 的 `Set`（每次切换 profile 都会重新接线，一次点击不能重置两遍）。文案复用 `.mo` 里已有的 msgid "Reset to Default Value"（zh_Hans / de 目录实测存在）：Q3 不批准 gettext 工具链，新串进来就是 36 语言里的一处空白
-Evidence 新增 `test/prefs-reset-effect.test.mjs`（6 条，切出汇聚点与 `_resetEffect` 用 mock settings 跑）：键集合恰好等于该特效声明的、tv 与 tv-glitch 不互串、只写当前 profile（切换后不写旧 profile）、重复接线不重复重置、行上没有逐选项按钮的键仍被覆盖、以及一条源码形状门。先红后绿：在 /tmp 副本里换回提交前的 prefs.js → 红（`_resetEffect() is not a two-space-indented method of the source being sliced`）
-Cost     重置范围由"这个特效接线时经过哪些键"定义，不由声明表定义 —— 好处是新增选项自动被覆盖，代价是新绑定路径**必须**走到汇聚点，否则静默逃出重置集合；形状门守的就是这一条。README 里"目前没有单档重置"那句从此失真，收尾时必须改写（双语两处）
+Symptom  the preferences window already had 119 per-option reset buttons (counted with `grep -o 'id="reset-' resources/ui/adw/*.ui`); what was missing was a single undo for "I've messed up this effect": the user has to remember which options they touched and click each back
+Change   add an `edit-clear-symbolic` round button to each effect row, calling `_resetEffect(nick)`. The key set is **not** obtained by "scanning the schema for the `<nick>-` prefix": in the real profile schema `tv-` is also the prefix of 6 `tv-glitch-*` keys (of the 9 `tv-*` keys only 3 belong to tv), so a prefix scan would clear another effect's options too. Instead, while wiring up in `_loadActiveProfile()` a `_bindingEffect` marks the current effect, the keys are collected at the single convergence point, and stored as a per-effect `Set` (each profile switch re-wires, so one click cannot reset twice). The wording reuses the existing msgid "Reset to Default Value" in the `.mo` files (verified present in zh_Hans / de): Q3 does not approve the gettext toolchain, so a new string would be a blank spot in 36 languages
+Evidence new `test/prefs-reset-effect.test.mjs` (6 cases, slicing out the convergence point and `_resetEffect` to run against mock settings): the key set is exactly what the effect declares, tv and tv-glitch do not cross, only the current profile is written (after a switch the old profile is not written), re-wiring does not reset twice, a key with no per-option button on its row is still covered, and a source-shape gate. Red first, green after: swapping in the pre-commit prefs.js in a /tmp copy → red (`_resetEffect() is not a two-space-indented method of the source being sliced`)
+Cost     the reset scope is defined by "which keys this effect passes through when wired", not by the declaration table — the upside is that new options are covered automatically, the cost is that a new binding path **must** reach the convergence point or it silently escapes the reset set; the shape gate guards exactly that. The README's "there is no per-effect reset yet" line is now false and must be rewritten at wrap-up (both languages)
 Commit   8c43373
 
 ### D-048 · 2026-10-09 · taste · v48
-Symptom  选项行只有标题，看不出这一项在调什么。手写解释句会把同一个意思在 36 份 `.mo` 里各欠一遍（仓库只有 `.mo`，没有 `.po` / `.pot`，Q3 又不批准 gettext 工具链）；而 GNOME 本来就为每个键存了一句话说明，运行时没人去取
-Change   `_describeRow()` 在绑定时从 `getProfileSettings().settings_schema` 反射该键的 `description` 填进 `subtitle`，新增 0 条可翻译串。三类行不动：`*-enable-effect`（那是特效自己的标题行，"Use the tv effect." 压在 "TV" 下面是噪声不是解释，26 个）、description 与 summary 逐字相同的（11 个，全是 mushroom / team-rocket 的占位）、已有手写 subtitle 的（`.ui` 里 8 条，8/8 带 `translatable="yes"`，已经过了 36 语言，而 schema 说明一句都没有）。profile schema 163 键 → 152 条可用说明、0 条为空，即 126 行获得解释句。`get_key()` 对未知键会抛，所以先 `has_key()`；取不到行则什么都不做。原先把它塞进 `_bindResetButton` 是错的：全套从绿退成 73/78，五条 `this._describeRow is not a function` —— 重置门用不着解释句。改成 `_finishBinding(settingsKey)` 汇聚点分别调用，六个 bind 入口的收尾都走它
-Evidence 用到的六个 GI 接口逐个对着本机 typelib 确认存在（`Adw.ActionRow` / `Adw.ExpanderRow` 的 `set_subtitle` / `get_subtitle`、`Gio.SettingsSchema.has_key` / `get_key`、`Gio.SettingsSchemaKey.get_summary` / `get_description`），没有凭记忆写。覆盖度用两种独立方法量过（gjs 反射 bundled `schemas/gschemas.compiled` + 直接解析 schema XML），结论一致；`settings_schema` 确认就是 `src/ProfileManager.js` 里 `lookup('…-profile')` 建出的那份，而不是主 schema 的 7 键。新增 `test/prefs-describe-row.test.mjs`（9 条）+ 两次变异：从汇聚点删掉 `_describeRow` 调用 → 9 条里精确 1 红；从 `_bind` 删掉转发 → 重置门里精确 1 红且失败的是新增的链断言，逐入口循环仍绿（那条断言存在的理由）。L0 全套 78/78
-Cost     schema XML 没有 `gettext-domain` 属性（`metadata.json` 里那份只作用于 UI 串），所以**解释句在任何界面语言下都是英文**。写代码这一侧无法让它变成中文，除非批准 gettext 工具链或把说明复制进 `.ui`（后者正是本条要避免的债）。本机 LANG 为 en_US.UTF-8，看不出违和；中文界面下会混排 —— 待你在真实会话目视判断可否接受，需要注销重登（prefs 进程同样吃 GJS 模块缓存，L1 探针覆盖不到 prefs.js）
+Symptom  option rows had only a title, giving no clue what the option adjusts. Hand-writing an explanation would owe the same meaning across 36 `.mo` files (the repo has only `.mo`, no `.po` / `.pot`, and Q3 does not approve the gettext toolchain); and GNOME already stores a one-line description per key that nobody fetches at runtime
+Change   `_describeRow()` reflects the key's `description` from `getProfileSettings().settings_schema` at bind time and fills it into `subtitle`, adding 0 translatable strings. Three row kinds are left alone: `*-enable-effect` (that is the effect's own title row; "Use the tv effect." under "TV" is noise, not an explanation — 26 of them), those whose description and summary are byte-identical (11, all mushroom / team-rocket placeholders), and those that already have a hand-written subtitle (8 in the `.ui`, 8/8 with `translatable="yes"`, already through 36 languages, while the schema descriptions are all in English). The profile schema's 163 keys → 152 usable descriptions, 0 empty, i.e. 126 rows gain an explanation. `get_key()` throws on an unknown key, so `has_key()` is checked first; if no row is found, do nothing. Putting this into `_bindResetButton` was wrong: the suite went from green to 73/78, five `this._describeRow is not a function` — the reset gate has no need of an explanation. Moved to a `_finishBinding(settingsKey)` convergence point called separately, which all six bind entry points now route through
+Evidence each of the six GI interfaces used was confirmed against this machine's typelib (`Adw.ActionRow` / `Adw.ExpanderRow`'s `set_subtitle` / `get_subtitle`, `Gio.SettingsSchema.has_key` / `get_key`, `Gio.SettingsSchemaKey.get_summary` / `get_description`), none written from memory. Coverage was measured two independent ways (gjs reflecting the bundled `schemas/gschemas.compiled` + parsing the schema XML directly), agreeing; `settings_schema` was confirmed to be the one built by `lookup('…-profile')` in `src/ProfileManager.js`, not the main schema's 7 keys. New `test/prefs-describe-row.test.mjs` (9 cases) + two mutations: removing the `_describeRow` call from the convergence point → exactly 1 red of the 9; removing the forwarding from `_bind` → exactly 1 red in the reset gate, and the failing one is the new chain assertion while the per-entry loop stays green (the reason that assertion exists). L0 suite 78/78
+Cost     the schema XML has no `gettext-domain` attribute (the one in `metadata.json` applies only to UI strings), so **the explanations are English in any UI language**. Nothing on the code side can make them Chinese without approving the gettext toolchain or copying the descriptions into the `.ui` (the latter being the debt this entry avoids). This machine's LANG is en_US.UTF-8, so nothing looks off; a Chinese UI will mix languages — left for you to judge by eye in a real session, which needs a log-out/log-in (the prefs process also eats GJS module cache, and the L1 probes cannot reach prefs.js)
 Commit   9f1a6d6
 
 ### D-049 · 2026-10-09 · chore · v48
-Symptom  资源清单里 4 个图标（copy-effects / paste-effects / window-open / window-close 的 `-symbolic.svg`）没有任何 shipped 文本指名：它们是给上游有、本 fork 没有的动作加的，却被编进 bundle 一起发出去
-Change   从 `resources/burn-my-windows.gresource.xml` 删这四行、删四个 `.svg`、`make` 重编译。中间态也被既有的 bundle 门抓住一次（只改清单、还没 `make` 时精确报出 "4 member(s) the manifest no longer lists … They are still shipped to users"）。5 个 PNG 与余下 5 个图标各自被特效 JS / shader / `prefs.ui` 指名，逐个查过，所以死资源只有这四个，没有连带清理
-Evidence 判"死"用了两条互相独立的依据：`grep -rIl` 全仓（排除 `.git` / `node_modules` / bundle 本体）只在清单里找到它们，`.mo` 二进制目录里 `grep -a` 也无命中；D-050 的门第一次跑列出**的正是这四个**。改后 `gresource list` 从 74 个成员变 70，`grep -c img/scalable/actions` 清单剩 5 行且 5 个都有人指名
-Cost     图标名是运行时按字符串查的（`prefs.js` 把 `/img` 注册进 IconTheme），所以"本仓文本里没有"不等于"没有任何东西查得到"—— 用户自己的 CSS 或第三方扩展理论上可以指名这几个图标。solo-use fork 接受这个前提；若上游日后重新用到它们，`git revert` 这一条即可
+Symptom  four icons in the resource manifest (the `-symbolic.svg` of copy-effects / paste-effects / window-open / window-close) were named by no shipped text: they were added for actions upstream has and this fork does not, yet were compiled into the bundle and shipped
+Change   delete those four lines from `resources/burn-my-windows.gresource.xml`, delete the four `.svg` files, `make` to rebuild. The intermediate state was also caught once by the existing bundle gate (with only the manifest changed, before `make`, it reported exactly "4 member(s) the manifest no longer lists … They are still shipped to users"). The 5 PNGs and the remaining 5 icons are each named by effect JS / shader / `prefs.ui`, checked one by one, so only these four were dead resources, no collateral cleanup
+Evidence "dead" was judged on two independent grounds: a repo-wide `grep -rIl` (excluding `.git` / `node_modules` / the bundle itself) found them only in the manifest, and `grep -a` in the `.mo` binary directories also had no hits; D-050's gate, on its first run, listed **exactly these four**. After the change `gresource list` went from 74 members to 70, and `grep -c img/scalable/actions` left 5 lines in the manifest, all 5 named by something
+Cost     icon names are looked up at runtime by string (`prefs.js` registers `/img` with IconTheme), so "no text in this repo names it" is not "nothing can ever look it up" — a user's own CSS or a third-party extension could in theory name these icons. A solo-use fork accepts that premise; if upstream ever uses them again, `git revert` this entry
 Commit   c7bbb49
 
 ### D-050 · 2026-10-09 · guard · v48
-Symptom  bundle 的两条既有门都只把 bundle 与**清单**对齐，没有一条把清单与"有没有人用"对齐。于是一个没人指名的图标照样编译、照样发货，而且删掉 `.ui` 里的引用也不会让任何检查变红 —— 上游升级带来新图标时，这一类债会重新积回来
-Change   `test/build-freshness.test.mjs` 新增一条：取清单里 `img/scalable/actions/` 的全部条目，剥掉目录与 `.svg` 得到图标名，在**我们会发出去的文本**里找一遍 —— `allJsSources()` 的字面量加上清单里每个 `.ui` 的正文。图标进控件只有这两条路（`.ui` 的 `icon-name` 属性，或 JS 传给 `new_from_icon_name()` 的串），所以能机械化，不像 shader 那样是拼串
-Evidence 该门第一次跑就红，并逐个列出四个名字（即 D-049 的结论被独立复现），而同一文件其余 6 条全绿。两次注入（各在一个全新的 /tmp 副本里，做完即弃）：往清单加一个谁也不指名的图标 → 该门红且把名字列出来；把 filter 前缀改成匹配不到任何东西 → 该门仍然红，走的是"空集不能算通过"那条控制
-Cost     只覆盖 `img/scalable/actions/`。PNG / shader / `.ui` 三类不在范围内：它们的引用是运行时路径与拼串（`/shaders/${nick}.frag`），按字面量查名字会一片假红。扩大范围需要另找依据，不在本轮
+Symptom  both existing bundle gates aligned the bundle with the **manifest** only; none aligned the manifest with "is anything using it". So an unnamed icon still compiled and shipped, and deleting a `.ui` reference turned no check red — when an upstream upgrade brings new icons, this class of debt accumulates again
+Change   `test/build-freshness.test.mjs` gains one case: take all `img/scalable/actions/` entries from the manifest, strip the directory and `.svg` to get the icon name, and look for it in **the text we ship** — the literals from `allJsSources()` plus the body of every `.ui` in the manifest. An icon reaches a widget by only these two routes (a `.ui`'s `icon-name` attribute, or a string passed to `new_from_icon_name()` in JS), so it is mechanical, unlike shaders which are string-concatenated
+Evidence the gate went red on its first run, listing the four names one by one (independently reproducing D-049's conclusion), while the other 6 cases in the same file were green. Two injections (each in a fresh /tmp copy, discarded after): add an icon nobody names to the manifest → the gate goes red and lists the name; change the filter prefix to match nothing → the gate still goes red, via the "an empty set cannot count as a pass" control
+Cost     covers only `img/scalable/actions/`. The three kinds PNG / shader / `.ui` are out of scope: their references are runtime paths and string concatenation (`/shaders/${nick}.frag`), and looking up names by literal would be all false red. Widening the scope needs another basis, not this round
 Commit   c7bbb49
 
 ### D-051 · 2026-10-09 · taste · v48
-Symptom  偏好窗口的四处归属位（菜单 `homepage` / `bugs`，About 的 `set_website` / `set_issue_url`）都指向上游仓库，而 `metadata.json` 的 `url` 早在导入时就是本 fork —— 用户按界面提示报障，issue 落在没有这份代码的 tracker 里
-Change   四处指回 fork。分界线写进注释：**代码在哪维护**归本 fork，**特效谁写的、钱与翻译队列在哪**归上游。`set_developer_name` / `set_copyright('© 2023 Simon Schneegans')` / license / 四个 donate-* / `show-sponsors` / `translate`（Weblate）/ `new-effect` / `wallpapers` 全部不动，`metadata.json` 的 donations 段也不动（Q5 捐赠保留原样）
-Evidence 新增的门（D-052）先写、代码未改时 5 条里 2 红，且失败消息把期望地址与实际地址都打出来；三条控制当场绿
-Cost     这是一次**归属**改动，不是修复：上游 issue 页对 upstream v48 原样安装的用户仍然是对的。若本 fork 哪天不再维护，这四处要一起改回去，门会指着 README 的那一行说为什么
+Symptom  the preferences window's four attribution slots (the menu's `homepage` / `bugs`, About's `set_website` / `set_issue_url`) all pointed at the upstream repository, while `metadata.json`'s `url` had been this fork's since import — a user reporting a problem from the UI hint filed it in a tracker without this code
+Change   point all four back at the fork. The dividing line is written into the comment: **where the code is maintained** belongs to the fork, **who wrote the effects and where the money and translation queues live** belongs to upstream. `set_developer_name` / `set_copyright('© 2023 Simon Schneegans')` / license / the four donate-* / `show-sponsors` / `translate` (Weblate) / `new-effect` / `wallpapers` are all untouched, and `metadata.json`'s donations section too (Q5 keeps donations as-is)
+Evidence the new gate (D-052) was written first; with the code unchanged, 2 of its 5 cases were red and the failure messages printed both expected and actual addresses; three controls were green on the spot
+Cost     this is an **attribution** change, not a fix: the upstream issue page is still right for someone running upstream v48 as-is. If this fork is ever no longer maintained, these four must be changed back together, and the gate will point at the README line saying why
 Commit   b64beb7
 
 ### D-052 · 2026-10-09 · guard · v48
-Symptom  D-051 这种"两个答案容易写成一个"的改动，最容易的回归是把上游仓库名整串替换掉 —— 于是捐赠页也变成 fork、署名也换成本仓库，而这两种错在界面上都看不出来。要一条门同时守住"指回来"和"不许顺手多指"两个方向
-Change   新增 `test/prefs-attribution.test.mjs`（5 条）。**期望地址不在测试里重复一遍**：fork 取自 README 的 `git clone https://github.com/<owner>/<repo>.git` 行，上游 owner 取自 `**Upstream:** [..](https://github.com/<owner>/<repo>)` 行 —— README 是用户读的那份，测试里再抄一份 URL 就是等着漂移的一处。署名比对 owner 段而不是某个人的名字，换人不必改门
-Evidence 三次注入各命中该守的一半（每个副本只放一种变异；第一版脚本想用 `cp` 恢复，撞上这里 `cp` 是交互别名、提示没答上就没恢复，导致后两次跑在上一次的污染状态上 —— 换成每次新建干净副本后结论才干净）：整串替换 → 只红"钱与翻译队列留在上游"与"归属编辑只在这四处"；只改 `set_copyright` / `set_developer_name` → 只红署名那条；只把 `set_website` 留回上游 → 红"报障去处"与"四处"两条。另有一条防自证的控制：fork 地址必须与上游地址不同，否则其余各条会"构造上成立"
-Cost     门读 README 的两行格式，改写 README 那一节时必须保住 `git clone …\.git` 与 `**Upstream:** [..](https://github.com/…)` 的形状，否则门红在"取不到地址"上而不是红在归属上。本轮刻意**没有**把 `changelog` 动作纳入断言：它仍打开上游的 changelog，是否改成本仓库 `CHANGELOG.md` 尚未拍板（见 MAINTENANCE.md 的「已知不修 / 待确认」），加门等于替这个决定做掉
+Symptom  for a change like D-051 where "two answers are easy to write as one", the most likely regression is replacing the upstream repo name wholesale — turning the donation page into the fork's and the credit into this repo — and neither error is visible in the UI. One gate must hold both directions: "point back" and "do not point extra while you're at it"
+Change   new `test/prefs-attribution.test.mjs` (5 cases). **The expected addresses are not restated in the test**: the fork comes from the README's `git clone https://github.com/<owner>/<repo>.git` line, the upstream owner from its `**Upstream:** [..](https://github.com/<owner>/<repo>)` line — the README is what users read, and copying a URL into the test again is one more place waiting to drift. The credit comparison uses the owner segment, not a person's name, so a change of person needs no gate change
+Evidence three injections each hit the half they guard (each copy carried only one mutation; the first script tried to restore with `cp`, hit this machine's interactive `cp` alias, and without an answer to the prompt did not restore, so the last two runs ran on the previous run's polluted state — conclusions were clean only after switching to a fresh copy each time): wholesale replacement → red only on "money and translation queues stay upstream" and "attribution edits are only these four"; changing only `set_copyright` / `set_developer_name` → red only on the credit line; leaving only `set_website` back at upstream → red on "where bugs go" and "four places". There is also a self-consistency control: the fork address must differ from the upstream one, or the rest would be "true by construction"
+Cost     the gate reads the README's two line formats, so rewriting that README section must keep the shape of `git clone …\.git` and `**Upstream:** [..](https://github.com/…)`, or the gate goes red on "cannot get the address" rather than on attribution. This round deliberately did **not** bring the `changelog` action into the assertions: it still opens the upstream changelog, and whether to change it to this repo's `CHANGELOG.md` is not yet decided (see MAINTENANCE.md's "known-not-fixed / to confirm"), so adding a gate would decide half the question for it
 Commit   b64beb7
 
 ### D-053 · 2026-10-09 · chore · v48
-Symptom  `docs/maintenance/measurement.md` §12 的"值"列里有三处把**单次采样**当基线存着：enable() 6 ms / 35 ms、`_chooseEffect()` 首帧 3.2 ms、begin_work / end_work "36 / 36"。它们的骗人方式不是数字错，而是让读者以为每个量只有一个点——下一次有人拿 35 去比实测 46，就会得出"退化了 31%"这种不存在的事实
-Change   本轮两次完整认证 + 三次补采（共 5 个 enable() 样本、5 个 constrained 首帧样本）后改成区间并标出采样次数与来源；begin_work 一行改述判据（进程级计数器，gnome-shell 自己也在计数，所以**起止差额没变宽**才是判据）；跨次稳定性一行改述成"五轮判定一致、数字不一致"。同一轮把 `docs/maintenance/measurement.md` §12 里 bundle 成员 74 → 70、AGENTS 的 L0 门清单补上四条偏好窗口门与图标门、README 双语里"恢复 74 个源文件"改成"那时是 74 个"
-Evidence 2026-10-09 23:07–23:10 完整认证 `RESULT: PASS`：7 探针 103 checks（13/10/27/25/5/20/3），`CRITICAL/JS ERROR lines across all sessions: 0`，零写入三哈希（dconf / profiles / 工作树）byte-identical，墙钟 3 分 24 秒（命令前后 `date` 量法，与原先的产物时间戳量法并列标注）。被认证的工作树是 `d7fdbf1`；其后差值可机械回读 —— `git diff --stat d7fdbf1..HEAD` 只含 `docs/maintenance/measurement.md`。L0 84/84
-Cost     **本轮收回一条我自己上一提交写下的归因**：`d7fdbf1` 里我写"46 ms 那次来自连跑，单跑三次都在 29–35"，暗示连跑更慢；这次认证同为连跑却打出 31 ms，该因果说法当场被自己的样本否掉，改写成"连跑与单跑没有稳定高低关系，46 是唯一高值但我说不出为什么"。同类一处更正："之后 28–89 µs" 被本轮的 127 µs 撑开。区间会变宽，不是一次写定的数
+Symptom  `docs/maintenance/measurement.md` §12's "Value" column stored three **single samples** as a baseline: enable() 6 ms / 35 ms, `_chooseEffect()` first frame 3.2 ms, begin_work / end_work "36 / 36". They deceive not by being wrong but by making the reader think each quantity has a single point — the next person comparing 35 against a measured 46 concludes a "31% regression" that does not exist
+Change   after two full certifications + three extra samples this round (5 enable() samples, 5 constrained first-frame samples), switch to ranges with the sample count and source noted; the begin_work row is restated as its criterion (a process-level counter that gnome-shell also increments, so **the start-end gap not widening** is the criterion); the cross-run stability row is restated as "five rounds agree on the verdict, not the numbers". The same round changed `docs/maintenance/measurement.md` §12's bundle members 74 → 70, added the four preferences-window gates and the icon gate to AGENTS's L0 gate list, and changed the bilingual README's "restored 74 source files" to "there were 74 then"
+Evidence full certification 2026-10-09 23:07–23:10 `RESULT: PASS`: 7 probes 103 checks (13/10/27/25/5/20/3), `CRITICAL/JS ERROR lines across all sessions: 0`, zero-write three hashes (dconf / profiles / working tree) byte-identical, wall clock 3 min 24 s (measured with `date` before and after, noted alongside the earlier artifact-timestamp method). The certified tree is `d7fdbf1`; the diff afterwards can be read back mechanically — `git diff --stat d7fdbf1..HEAD` contains only `docs/maintenance/measurement.md`. L0 84/84
+Cost     **this round withdraws an attribution I myself wrote in the previous commit**: in `d7fdbf1` I wrote "the 46 ms run came from a batch run, the three single runs were all 29–35", implying batch runs are slower; this certification was also a batch run yet printed 31 ms, so the causal claim was refuted by its own sample on the spot, and was rewritten as "batch and single runs have no stable high/low relation, 46 is the only high value and I cannot say why". One more correction of the same kind: "then 28–89 µs" was stretched to 127 µs this round. Ranges widen; they are not written once and fixed
 Commit   2bbd164
 
 ### D-054 · 2026-10-09 · guard · v48
-Symptom  D-047 的承诺是"以后新增的选项不用谁去登记就自动被覆盖"，而这句话有个没被任何检查守着的**前提**：键是在 `_loadActiveProfile()` 的特效循环里、`_bindingEffect` 置位期间收的。某个特效若在别处绑自己的键（比如页面 realize 时），那把橡皮擦就永久漏掉那一键，而既有两条门仍然全绿——它们只断言六个 bind 入口都走到汇聚点，不看调用发生在哪个方法里
-Change   `test/prefs-reset-effect.test.mjs` 新增一条**扫调用点**的门：遍历 `src/effects/*.js` 每处 `dialog.bind*(`，按"两个空格缩进的类方法"把它归属到所在方法，要求全部落在 `bindPreferences()`（特效循环唯一调用的那个，即 `prefs.js` 里的 `effect.bindPreferences(this)`）。附一条防自证控制：扫到的文件数与调用数必须都 > 0
-Evidence 实测 26 个特效文件、bind 调用全部在 `bindPreferences()` 内，当前没有漏网的。另一半也查了：`src/effects/*.js` 与 `src/*.js` 没有任何一处绕过 helper 直接 `Gio.Settings.bind(...)`（Fire.js 走 `getProfileSettings().reset/set_*` 是它自己的预设功能，不是绑定）。两次注入（各在一个全新的 /tmp 副本里，做完即弃）：把 Apparition 一行 `bindAdjustment` 挪进 `getNick()` → 红且消息点名 "Apparition.js: getNick()"；把扫描正则改成一个不存在的调用名 → 红在"scanned 26 effect file(s) and found 0 bind call(s)"那条控制上。L0 全套 85/85
-Cost     归属靠"两个空格缩进的类方法"，这是**本仓库的书写约定**不是语言规则：将来有人把方法写成别的缩进，那一行会被归为 `null` 从而变红（红得响，不会静默放行）。这条门守"调用点落在哪个方法"，仍不守"标记的置位与复位是否成对"——那一半靠 `_bindingEffect = null` 紧跟 `bindPreferences` 这一处写法保证，本轮没有为它单独造门
+Symptom  D-047's promise was "new options are covered automatically without anyone registering them", and that sentence had a **premise** no check guarded: keys are collected in `_loadActiveProfile()`'s effect loop while `_bindingEffect` is set. If an effect binds its own keys elsewhere (say at page realize), the eraser permanently misses that key while both existing gates stay green — they only assert all six bind entry points reach the convergence point, not which method the call happens in
+Change   `test/prefs-reset-effect.test.mjs` gains a **call-site scanning** gate: it walks every `dialog.bind*(` in `src/effects/*.js`, attributes it to its enclosing "two-space-indented class method", and requires all of them to fall inside `bindPreferences()` (the one the effect loop calls, i.e. `effect.bindPreferences(this)` in `prefs.js`). Plus a self-consistency control: both the scanned file count and the call count must be > 0
+Evidence measured 26 effect files, all bind calls inside `bindPreferences()`, none escaping today. The other half was checked too: no place in `src/effects/*.js` or `src/*.js` bypasses the helper to call `Gio.Settings.bind(...)` directly (Fire.js's `getProfileSettings().reset/set_*` is its own preset feature, not a binding). Two injections (each in a fresh /tmp copy, discarded after): moving Apparition's `bindAdjustment` line into `getNick()` → red with the message naming "Apparition.js: getNick()"; changing the scan regex to a call name that does not exist → red on the "scanned 26 effect file(s) and found 0 bind call(s)" control. L0 suite 85/85
+Cost     attribution relies on "a two-space-indented class method", which is **this repo's writing convention**, not a language rule: if someone later writes a method with different indentation, that line is attributed to `null` and goes red (loudly, never silently passing). This gate holds "which method the call site falls in"; it still does not hold "whether marking and unmarking are paired" — that half is guaranteed by the `_bindingEffect = null` immediately after `bindPreferences`, for which no separate gate was built this round
 Commit   22ed443
 
 ### D-055 · 2026-10-10 · fix · v48
-Symptom  D-047 的每特效重置把 `<nick>-enable-effect` 也收进了集合。真实会话里按 AT-SPI 驱动偏好窗口按下橡皮擦后，配置档里消失的是两行：`glide-tilt` **和** `glide-enable-effect`。对 glide 无害（默认就是关），但 `fire-enable-effect` 是 26 个开关里唯一默认为 `true` 的（这条本身由 `build-freshness` 的门守着）——"把这个特效调回默认"于是会顺手把 Fire 打开，反向重置 paint-brush 会把它关掉，直接改掉"下一个窗口播哪个动画"，而一枚标着"重置"的按钮完全看不出自己有这个副作用
-Change   收集时就排除 `-enable-effect`，与说明句用的同一个后缀判据。开关留给用户自己翻。另外排除后理论上出现"某特效只绑开关"→ `_effectKeys[nick]` 从未建立 → `for (const key of undefined)` 抛 `can't access property Symbol.iterator`，抛在 prefs 进程里即 D-046 那一类。选择**加门不加 `?? []`**：新增"no effect can be left with an empty reset set"扫 26 个特效的 `bindPreferences()`，要求每个至少绑一个非开关选项（实测全部满足），将来违反即在 L0 红，而不是靠静默兜底把崩溃藏起来
-Evidence 发现与复验都在真实运行时：① 真窗口里点 Glide 的按钮，用备份前后 keyfile 的 diff 取证（只少那两行，其余 25 行逐字不变），测完按备份 byte-identical 还原（`sha256sum` 与测试前一致）；② 从 prefs.js 原样切出 `_bindResetButton` / `_resetEffect` 对**真的** keyfile GSettings 跑：重置后 `fire-enable-effect=false` 仍在文件里、`fire-animation-time` 与 `fire-color-1` 被清、`wisps-*` 未动；③ 空集合路径在同一次脚本里实测抛出上述 TypeError。先红后绿：改期望 → 5 红（新用例的失败消息直接写出"which animation plays for every window"）→ 改实现 → 9/9；门本身的注入（把某特效的 `bindPreferences` 清空）精确红在第 9 条。L0 全套 87/87
-Cost     这是**行为修正**，不是扩展：重置的含义收窄成"这个特效声明过的选项"。双语 README 同步写明开关不在范围内。另外本轮的实测跨两次 shell（07:47 与 08:03 各一次，后者是机器又重启过），两边跑的都是同一份磁盘代码，结论不受影响；D-047 里"键集合恰好等于该特效声明的"那句作为当时事实保留不改
+Symptom  D-047's per-effect reset also collected `<nick>-enable-effect`. In a real session, pressing the eraser in the preferences window via AT-SPI removed two lines from the profile: `glide-tilt` **and** `glide-enable-effect`. Harmless for glide (off by default), but `fire-enable-effect` is the only one of the 26 switches defaulting to `true` (itself guarded by `build-freshness`'s gate) — so "reset this effect to default" would switch Fire on, and resetting paint-brush in reverse would switch it off, directly changing "which animation plays for the next window", while a button labelled "reset" gives no hint of that side effect
+Change   exclude `-enable-effect` when collecting, the same suffix criterion as the description line. The switch is left for the user to flip. Also, after the exclusion a "some effect binds only the switch" case could in theory arise → `_effectKeys[nick]` never built → `for (const key of undefined)` throws `can't access property Symbol.iterator`, in the prefs process, i.e. D-046's class. Chose **a gate over a `?? []`**: added "no effect can be left with an empty reset set", scanning the 26 effects' `bindPreferences()` and requiring each to bind at least one non-switch option (all satisfy it today); a future violation goes red at L0 rather than being hidden by a silent fallback
+Evidence discovery and re-verification were both at real runtime: ① in a real window, clicking Glide's button, evidenced by a keyfile diff before and after a backup (only those two lines gone, the other 25 byte-identical), then restored byte-identical to the backup (`sha256sum` matching pre-test); ② slicing `_bindResetButton` / `_resetEffect` verbatim out of prefs.js and running them against the **real** keyfile GSettings: after reset `fire-enable-effect=false` is still in the file, `fire-animation-time` and `fire-color-1` are cleared, `wisps-*` untouched; ③ the empty-set path threw the above TypeError in the same script. Red first, green after: change the expectation → 5 red (the new case's failure message directly says "which animation plays for every window") → change the implementation → 9/9; injecting into the gate itself (emptying an effect's `bindPreferences`) goes red on exactly case 9. L0 suite 87/87
+Cost     this is a **behaviour fix**, not an extension: reset's meaning narrows to "the options this effect declared". The bilingual README states in step that the switch is out of scope. Also this round's measurement spanned two shells (07:47 and 08:03, the latter after the machine rebooted again); both ran the same on-disk code, so the conclusion is unaffected; D-047's "the key set is exactly what the effect declares" is kept unchanged as the fact at the time
 Commit   0e99c80
 
 ### D-056 · 2026-10-10 · taste · v48
-Symptom  菜单的「View Changelog」与扩展版本变化后弹出的 toast 打开的是**上游仓库**里的 changelog。这一项和 D-051 那四处不同：那四处是"issue 落在没有这份代码的 tracker"，这一处是**必然**答非所问——toast 由本 fork 的 `metadata.json:version` 触发，用户跟着点进去，读到的文档里一条本 fork 的变更都没有。Q4 当时只批了 website / issues 两处，所以这条被我记成「待你决定」挂在 `MAINTENANCE.md` 的「已知不修 / 待确认」里；本轮按"剩下的问题按推荐处理"关掉它
-Change   地址换成本仓库的 `CHANGELOG.md`。归属分界线一字不动：**读这份代码的人该看到什么**归本 fork，署名 / 许可证 / 捐赠 / 翻译队列归上游——所以这是第五个槽位，不是把范围再往外扩一寸
-Evidence 换址前先确认落点不是我自己臆想的：`git symbolic-ref refs/remotes/origin/HEAD` → `refs/remotes/origin/master`（默认分支确实是 `master`，上游那份是 `main`，照抄上游路径会 404）；`git cat-file -e origin/master:CHANGELOG.md` 成立；抓取渲染页得到 "Repository: burn-my-windows / First heading: CHANGELOG — burn-my-windows@local"。顺带查明一件事：基线导入 `16ab10a` 的顶层只有 `LICENSE extension.js locale metadata.json prefs.js resources schemas src`——`docs/` 从来不在我们的树里，旧链接指向的一直是上游仓库网页，所以"本仓库缺那份文件"不可能是回归。L0 全套 87/87
-Cost     归属改动，不是修复：对原样跑 upstream v48 的人，旧地址仍然正确；本 fork 若哪天不再维护，这五处要一起改回去。另有一条**门看不见的耦合**：URL 里的分支名 `master` 靠上面的命令核对，不是由断言守着，记在 `MAINTENANCE.md` 的「已知不修 / 待确认」
+Symptom  the menu's "View Changelog" and the toast shown after the extension version changes open the changelog in the **upstream repository**. This slot differs from D-051's four: those four were "the issue lands in a tracker without this code", this one **necessarily** answers the wrong question — the toast is triggered by this fork's `metadata.json:version`, the user follows it, and the document they read contains not one change from this fork. Q4 at the time approved only the website / issues two, so this was recorded as "your call" in `MAINTENANCE.md`'s "known-not-fixed / to confirm"; this round closed it under "handle the remaining questions per recommendation"
+Change   change the address to this repo's `CHANGELOG.md`. The attribution dividing line is unchanged to the letter: **what someone reading this code should see** belongs to the fork, credit / license / donations / translation queue belong to upstream — so this is a fifth slot, not widening the scope by an inch
+Evidence before changing the address, confirmed the landing spot was not my own imagining: `git symbolic-ref refs/remotes/origin/HEAD` → `refs/remotes/origin/master` (the default branch really is `master`, upstream's is `main`, and copying upstream's path would 404); `git cat-file -e origin/master:CHANGELOG.md` holds; fetching the rendered page gave "Repository: burn-my-windows / First heading: CHANGELOG — burn-my-windows@local". Also found something incidentally: the baseline import `16ab10a`'s top level contains only `LICENSE extension.js locale metadata.json prefs.js resources schemas src` — `docs/` was never in our tree, and the old link always pointed at the upstream repository's web page, so "this repo lacks that file" could never have been the regression. L0 suite 87/87
+Cost     an attribution change, not a fix: for someone running upstream v48 as-is, the old address is still right; if this fork is ever no longer maintained, these five must be changed back together. There is also a **coupling the gate cannot see**: the branch name `master` in the URL is checked by the command above, not held by an assertion, recorded in `MAINTENANCE.md`'s "known-not-fixed / to confirm"
 Commit   f976433
 
 ### D-057 · 2026-10-10 · guard · v48
-Symptom  D-052 的门**刻意不含** changelog——那时决定还没拍，加门等于替它做掉。拍板之后第五个槽位就落在门外面：上游升级把这一行带回 `Schneegans/Burn-My-Windows`，或有人整串清扫时把它算进去，都不会有检查变红
-Change   `test/prefs-attribution.test.mjs` 的"报障去处"从四个地址收到五个，新增取件器 `changelogUrl()`。这一项不走 `addURIAction`，URL 在 `Gtk.show_uri(null, …)` 里，取件器形状因此不同，但同样带"取不到就红"的断言（动作被删 / 不再打开网址，都红在取件器上而不是红在期望值上）。清扫那条由"恰好 4 次"收到"恰好 5 次"
-Evidence 先红后绿：门先扩、代码未改时 5 条里 2 红（第 2 条把实际地址与期望地址都打印出来，第 5 条报 4≠5），其余 3 条当场绿——红的是该红的两条，不是全部。两次注入各命中该守的一半（每次一个全新 /tmp 副本，做完即弃）：把 changelog 换回上游 → 红第 2、5 条；再把 `new-effect` 与 `wallpapers` 一起扫成 fork → **只**红第 5 条，因为那两个 URL 本来就不在断言名单里，越界只能靠计数发现
-Cost     第 2 条按 `startsWith(forkUrl())` 判，只比 host + 仓库名，`/blob/master/CHANGELOG.md` 这段路径与分支不在断言里（就是 D-056 记的那条耦合）。计数写成"恰好 5"是有意的：将来加第六个槽位必须同时改期望值，而多一个槽位就是一次新的归属决定，不该被一次编辑顺手带过
+Symptom  D-052's gate **deliberately excluded** changelog — the decision was not yet made, and adding a gate would decide it. Once decided, the fifth slot fell outside the gate: an upstream upgrade bringing that line back to `Schneegans/Burn-My-Windows`, or someone sweeping the whole thing, would turn no check red
+Change   `test/prefs-attribution.test.mjs`'s "where bugs go" went from four addresses to five, with a new extractor `changelogUrl()`. This one does not go through `addURIAction`; its URL is in `Gtk.show_uri(null, …)`, so the extractor has a different shape, but it carries the same "red if it cannot be extracted" assertion (deleting the action / no longer opening the URL both go red on the extractor rather than on the expected value). The sweep count went from "exactly 4" to "exactly 5"
+Evidence red first, green after: gate widened first, code unchanged → 2 of 5 red (case 2 prints both actual and expected addresses, case 5 reports 4≠5), the other 3 green on the spot — exactly the two that should be red, not all. Two injections each hit the half they guard (a fresh /tmp copy each time, discarded after): change changelog back to upstream → red on cases 2 and 5; then sweep `new-effect` and `wallpapers` into the fork too → red on case 5 **only**, because those two URLs are not in the assertion list anyway and overreach can only be caught by the count
+Cost     case 2 judges by `startsWith(forkUrl())`, comparing only host + repo name; the `/blob/master/CHANGELOG.md` path and branch are not in the assertion (the coupling D-056 recorded). The count is written as "exactly 5" on purpose: a future sixth slot must change the expectation too, and one more slot is a new attribution decision that should not be slipped through by an edit
 Commit   f976433
 
 ### D-058 · 2026-10-10 · chore · v48
-Symptom  D-047 把 reset 与说明句收进 `_finishBinding()` 之后，七个 bind helper 的注释还写着 "It also binds the corresponding reset button"。这句话今天为假：它们只把键交给汇聚点，真正的绑定在 `_finishBinding()` 里。注释指错地方，下一个人会去 `_bind` 中找一段已经不存在的代码
-Change   七处改成 "It also feeds `_finishBinding()`."（六处原本就是一行，`bindColorButton` 那句原本跨三行、现在跨两行）。方法名带反引号，便于 grep
-Evidence `grep -c "It also feeds" prefs.js` = 7；全仓搜残留说法 `grep -rn "binds the corresponding" --exclude-dir=.git --exclude-dir=reports .` 输出为空；`node --check prefs.js` 通过。这条是**本轮改址时顺手走到的**：为核对第 5 个槽位把七个 helper 都读了一遍，才看见第七处（`bindColorButton`）在上一轮被漏掉
-Cost     纯注释，无行为改动，升级时可整体丢弃。失真源头是我自己前一轮的汇聚点改造，不是上游——那句注释在它原本的代码里是对的
+Symptom  after D-047 folded reset and the description line into `_finishBinding()`, the seven bind helpers' comments still read "It also binds the corresponding reset button". That sentence is false today: they only hand the key to the convergence point, the real binding is in `_finishBinding()`. A comment pointing at the wrong place sends the next person looking in `_bind` for code that no longer exists
+Change   all seven now read "It also feeds `_finishBinding()`." (six were already one line, `bindColorButton`'s was three lines and is now two). Method names carry backticks, for greppability
+Evidence `grep -c "It also feeds" prefs.js` = 7; repo-wide search for the stale wording `grep -rn "binds the corresponding" --exclude-dir=.git --exclude-dir=reports .` is empty; `node --check prefs.js` passes. This one was **stumbled on while changing the address this round**: reading all seven helpers to verify the fifth slot is how the seventh (`bindColorButton`) was seen to have been missed last round
+Cost     pure comment, no behaviour change, discardable wholesale on an upgrade. The source of the drift was my own previous round's convergence-point rework, not upstream — that comment was correct in the code it originally sat in
 Commit   f976433
 
 ### D-059 · 2026-10-10 · chore · v48
-Symptom  关掉 D-056 那一处时，同一张表里翻出两条自己的债。① `docs/maintenance/measurement.md` §12 的"最近一次完整认证"行把 `prefs.js` 写进了**触发重跑**的清单，而紧跟它的一行明写着七个探针**不加载** `prefs.js` —— 两行互相打脸，后果不是我纸上纠结：我照旧清单为一次 `prefs.js` 改动跑了整整 3 分半的 `run.sh all`。② §13 那条 unredirect 无引用计数还挂着"**待你决定**"，可它是 STATE 里早就定为「保持记录、刻意不修」的 X1——一个已经拍过的决定被两种口径各写了一遍
-Change   ① 触发清单按**探针的加载路径**重写：`extension.js` / `src/` / `resources/shaders/`（`.frag` 经 GResource 加载，探针 02 逐个编译）；`prefs.js` / 图标 / `.ui` 明确划出去，它们的门槛就地写明是 `npm test` 的四条偏好窗口门 + 本页 L2 行，并把"这一轮白跑了一次"留在表里当理由而不是偷偷改窄。② §13 的 unredirect 改成**决定：不修**，附代价不对称的理由（要在 `src/Shader.js` 加引用计数＝推翻 26 个特效共用的开合时序，换到的只是一帧级的观感差）与**翻案条件**（实机报出全屏动画被多余合成打断，按症状动手而不是按这段分析动手）。③ 本轮认证数字入表：enable() 第八个样本、constrained 首帧第八个样本（中位由 3.2 改 3.4 ms）、begin/end 第五轮、L1 计时第四轮、跨次稳定性第八轮；`之后 28–149 µs` 那行的两个下界（区间下界 28 来自更早一轮，本轮与近八次的首帧之外读值是 42–149）分开写明，这是我上一版混着写造成的第二个歧义
-Evidence 认证在干净树 `9b5e3d4` 上跑：08:47:19–08:50:49（`date` 前后差值 3 分 30 秒），`RESULT: PASS`、退出 0，7 探针 103 checks（13/10/27/25/5/20/3），CRITICAL/JS ERROR 0，零写入三哈希 dconf / profiles / 工作树 byte-identical。判据结论与上一轮一致，各探针计数逐项相同——这正是"对 prefs.js 而言白跑"的实测依据。本轮样本原样取自产物 `$OUT/06-main-thread-budget.json`（`steps` 段）与 stdout：`enableMs` 5 / 35、`constrainedChooseUs` 3260 / 72 / 126、`beginWork=36 endWork=36`（`overview-close` 场景 12/13，即 `outstandingWorkByScenario` 末值 -1，取自 stdout 的场景行）、26 特效 71–73 帧。另外顺手做了一次**全量锚点重走**（一次性 python heredoc，**没有入库**，因为还没决定要不要把它做成跨 fork 可复用的脚本）：从 committed markdown（排除 `reports/`）抽出 29 个不同 `file:line`，逐条打印目标行，**0 条空行或越界**（`docs/maintenance/compat-matrix.md` 与 `docs/maintenance/shell-internal-api.md` 那两张表靠行号定位，是最先烂掉的一类）。L0 87/87、`npm run check`、`check:log` 全绿
-Cost     这次改窄是**拿一轮真实运行的无差异结论换来的**，不是嫌麻烦：如果哪天探针开始加载 `prefs.js`（比如给它加一条"用 Gtk.Builder 真装一次设置页"的断言），这条清单要跟着改回去。§13 那处只是决定记录，没有代码、没有可回退的东西；它换掉"待你决定"的代价是——若你在实机上真看到全屏撕裂，这一条就是第一嫌疑
+Symptom  closing D-056's slot surfaced two debts of my own in the same table. ① `docs/maintenance/measurement.md` §12's "most recent full certification" row listed `prefs.js` in the **re-run trigger** list, while the very next row says the seven probes do **not** load `prefs.js` — the two rows contradict each other, and the consequence was not paper agonising: I ran a full 3.5-minute `run.sh all` for one `prefs.js` change on the old list. ② §13's unredirect-no-refcount item still carried "**your call**", yet it was X1, long ago set in STATE as "record and deliberately do not fix" — a decision already made, written twice in two voices
+Change   ① rewrite the trigger list by the **probes' load path**: `extension.js` / `src/` / `resources/shaders/` (`.frag` loads via GResource, probe 02 compiles each); `prefs.js` / icons / `.ui` are explicitly carved out, their threshold stated in place as `npm test`'s four preferences-window gates + this page's L2 row, and "this round wasted one run" left in the table as the reason rather than quietly narrowing it. ② change §13's unredirect to **decision: do not fix**, with the asymmetric-cost reason (adding a refcount in `src/Shader.js` = overturning the open/close timing shared by 26 effects, for only a frame-level visual difference) and the **reversal condition** (a real machine reporting fullscreen animations interrupted by redundant compositing — act on the symptom, not on this analysis). ③ put this round's certification numbers into the table: enable()'s eighth sample, constrained first frame's eighth sample (median changed from 3.2 to 3.4 ms), begin/end's fifth round, L1 timing's fourth round, cross-run stability's eighth round; the two lower bounds in the "then 28–149 µs" row (range lower bound 28 from an earlier round; this round and the recent eight's non-first-frame reads are 42–149) are now stated separately, the second ambiguity caused by my previous version mixing them
+Evidence certification ran on the clean tree `9b5e3d4`: 08:47:19–08:50:49 (`date` difference 3 min 30 s), `RESULT: PASS`, exit 0, 7 probes 103 checks (13/10/27/25/5/20/3), CRITICAL/JS ERROR 0, zero-write three hashes dconf / profiles / working tree byte-identical. The verdict matches the previous round, per-probe counts identical item by item — which is the measured basis for "wasted for prefs.js". This round's samples come as-is from the artifacts `$OUT/06-main-thread-budget.json` (`steps` section) and stdout: `enableMs` 5 / 35, `constrainedChooseUs` 3260 / 72 / 126, `beginWork=36 endWork=36` (`overview-close` scenario 12/13, i.e. `outstandingWorkByScenario` last value -1, from stdout's scenario lines), 26 effects 71–73 frames. Also did a **full anchor re-walk** incidentally (a one-off python heredoc, **not committed**, because it is not yet decided whether to make it a cross-fork reusable script): extracted 29 distinct `file:line` from committed markdown (excluding `reports/`), printed each target line, **0 blank or out-of-range** (`docs/maintenance/compat-matrix.md` and `docs/maintenance/shell-internal-api.md`'s two tables locate by line number and rot first). L0 87/87, `npm run check`, `check:log` all green
+Cost     this narrowing was **bought with a real run's no-difference result**, not laziness: if the probes ever start loading `prefs.js` (say by adding an assertion that really mounts the settings page with `Gtk.Builder`), this list must be changed back. §13's item is just a decision record, no code, nothing to revert; the cost of replacing "your call" is — if you really see fullscreen tearing on a real machine, this is the first suspect
 Commit   2fe1e0e
 
 ### D-060 · 2026-10-10 · chore · v48
-Symptom  用户注销重登之后有两件事必须当场回答，而其中一件我第一版做错了。① D-056 那个新地址到底进没进真实会话——上一轮我只能标"没加载"，因为 `ps` 里的宿主进程比文件老。② 我顺手想用 AT-SPI 搜一下说明句文本，好把"126 行渲染出来"这条从"要你眼睛看"升级成机器可判。**结果是假阴性**：三个选项行标题（"Animation time" / "Tilt" / "Speed"）全 0 命中，我第一反应写成"说明句可能真没渲染"
-Change   把这两件事的结论与**仪器边界**写进文档：`AGENTS.md` 的 L2 条新增一条"折叠的 `Adw.ExpanderRow` 整棵子树不在 a11y 树上"，并给出不许用它判说明句渲染的推论与替代做法；`docs/maintenance/measurement.md` §12 新增一行"L2 复测（11:19 重登后，自动部分）"，把新代码已加载的因果链、26/26 计数、两个通道的告警计数、那条**不属于本扩展**的 boot 错误，以及"注销会带走宿主、但反过来说『只杀它就够』仍未实测"都记在同一行里
-Evidence 全条命令产出：gnome-shell `350714` 于 11:19:34 起动，`ps` 显示**当时没有** prefs 宿主进程，11:34:30 我第一次开设置窗口时才新起 `/usr/bin/gjs -m /usr/share/gnome-shell/org.gnome.Shell.Extensions`（pid 374277）——`prefs.js` mtime 是 08:37:25，故加载的必是新那份。`gnome-extensions info` 报 `State: ACTIVE`、`Version: 48`、`URL: github.com/SHADE-glitch/…`。AT-SPI 遍历真窗口（frame `Burn-My-Windows 48`）得 469 节点：`Reset to Default Value` **26**、`Preview this effect` **26**、`switch` **26**、`named=117 / described=1`（唯一那条 description 是窗口的 `Close the window`）。假阴性的判别证据：同一棵树里 26 个特效行标题全在，而任何**选项行**标题 0 命中 ⇒ 缺的是整棵折叠子树，不是说明句。`journalctl --since '11:19:30'`：我们前缀告警 **0 条**；JS ERROR **1 条** = `TypeError: can't access property "ensure_style", firstIcon.icon is null`，归属证据是 `grep -rl firstIcon /usr/share/gnome-shell/extensions/` 只命中 `ubuntu-dock@ubuntu.com/dash.js`，而全仓（本 fork）`ensure_style` / `firstIcon` **各 0 命中**。剪贴板未被我的合成点击改动（`wl-paste` 前后同文）；窗口用它自己的 `Close` 动作关闭（`do_action(0) → true`，复查 frame 数 0），`prefs-open-count` 13 → 14
-Cost     说明句是否**渲染**仍然没有机器办法证（只能展开后用眼或手搭 builder），这一条从"我差点写成已证"退回到"如实标未证"。同一条推论对将来别有用：凡"某控件树里搜不到文本"的结论，先证明那个子树本来就在树上。另外两处未闭：只重启宿主进程够不够（本次是完整注销，不能反推）；以及本 fork 之外那条 ubuntu-dock 的 boot 错误不在本任务范围内，只记录归属、不动兄弟目录
+Symptom  after the user logged out and back in, two things had to be answered on the spot, and I got one of them wrong in the first version. ① whether D-056's new address actually reached the real session — last round I could only mark it "not loaded", because the host process in `ps` was older than the file. ② I thought I would use AT-SPI to search for the description text, to upgrade "126 rows rendered" from "your eyes" to machine-judgeable. **It was a false negative**: three option-row titles ("Animation time" / "Tilt" / "Speed") all returned 0 hits, and my first reaction was to write "the descriptions may really not render"
+Change   write both conclusions and the **instrument boundary** into the docs: `AGENTS.md`'s L2 section gains "a collapsed `Adw.ExpanderRow`'s whole subtree is not in the a11y tree", with the corollary not to use it to judge description rendering and the alternative; `docs/maintenance/measurement.md` §12 gains a row "L2 re-test (after the 11:19 re-login, automated part)" recording in the same row the causal chain that the new code was loaded, the 26/26 counts, the two channels' warning counts, the boot error **not belonging to this extension**, and "logging out takes the host away, but conversely 'killing just it is enough' is still unmeasured"
+Evidence full command output: gnome-shell `350714` started at 11:19:34, `ps` showed **no** prefs host process at that time, and only when I first opened the settings window at 11:34:30 did `/usr/bin/gjs -m /usr/share/gnome-shell/org.gnome.Shell.Extensions` (pid 374277) start — `prefs.js` mtime is 08:37:25, so what loaded must be the new one. `gnome-extensions info` reported `State: ACTIVE`, `Version: 48`, `URL: github.com/SHADE-glitch/…`. AT-SPI walked the real window (frame `Burn-My-Windows 48`) to 469 nodes: `Reset to Default Value` **26**, `Preview this effect` **26**, `switch` **26**, `named=117 / described=1` (the one description is the window's `Close the window`). The evidence for the false negative: in the same tree all 26 effect-row titles are present, while any **option-row** title has 0 hits ⇒ what is missing is the whole collapsed subtree, not the descriptions. `journalctl --since '11:19:30'`: our-prefix warnings **0**; JS ERROR **1** = `TypeError: can't access property "ensure_style", firstIcon.icon is null`, whose attribution is that `grep -rl firstIcon /usr/share/gnome-shell/extensions/` hits only `ubuntu-dock@ubuntu.com/dash.js`, while the whole repo (this fork) has **0 hits** for `ensure_style` / `firstIcon`. The clipboard was not changed by my synthetic click (`wl-paste` identical before and after); the window closed via its own `Close` action (`do_action(0) → true`, re-checked frame count 0), `prefs-open-count` 13 → 14
+Cost     whether the descriptions **render** still has no machine method (only expanding and looking, or building real rows by hand) — this one steps back from "I almost wrote it as proven" to "honestly marked unproven". The same corollary is useful later: for any "no text found in a widget tree" conclusion, first prove that subtree was in the tree to begin with. Two other things stay open: whether restarting just the host process is enough (this was a full log-out, so it cannot be inferred); and the ubuntu-dock boot error outside this fork is out of this task's scope, recorded for attribution only, sibling directory untouched
 Commit   c4d3a93
 
 ### D-061 · 2026-10-10 · guard · v48
-Symptom  D-057 收下第五个槽位之后，那条 URL 被比的仍然只有 **host + 仓库名**：`/blob/master/CHANGELOG.md` 这半截路径是裸的。而 §13 我只承认了"分支名没人守"——**其实路径也没人守**，这是一条记错了自己覆盖面的账。漏掉的三种改法都能绿着过 L0：把上游的 `docs/changelog.md` 说法抄回路径里、把 blob 链接写成仓库根、以及我们自己把 `CHANGELOG.md` 改名——第三种最真实，因为它连 URL 都不用动
-Change   `test/prefs-attribution.test.mjs` 加第 5 条：把链接拆成 `/blob/<ref>/<path>`，要求 `<path>` **在本仓库里真读得到**、非空、且含 `# CHANGELOG` 标题（toast 承诺的是变更日志，不是随便一份文档）；同时显式拒绝绝对路径与 `..`，否则"读到了一个文件"根本不等于"我们发货它"。`<ref>`（分支名）**仍然不断言**，理由写在断言注释里也写在 §13：CI 检出里没有一个可信的"本仓库默认分支叫什么"的来源，为了这一条去往仓库里塞一个字段，等于替那个决定做掉一半
-Evidence 门先写、当场绿（当前 URL 解析到 `CHANGELOG.md`，读得到、有标题），然后**三次注入各命中同一断言而消息各不相同**（每次新建一个 /tmp 干净副本，跑完即删）：路径改成 `docs/changelog.md` → 红并打印 `sends the user to "docs/changelog.md" on branch "master", but the repository has no such file … ENOENT`；整条 URL 换成仓库根 → 红在 `"…" is not a /blob/<ref>/<path> link`；把副本里的 `CHANGELOG.md` 改名为 `CHANGES.md` 而**不动 URL** → 红回第一条消息（这一条是三注入里最值钱的，它证明判据真的落到了我们的树上，而不是只看字符串形状）。三次都只红这一条、其余 5 条照常绿。第一次跑批量注入脚本时第三例没输出（`ls -d` 却报残留 0），单独重跑一次才拿到结论——批量脚本"少打印"不等于"少执行"，得单独复核。L0 全套 **88/88**、`npm run check`、`check:log` 全绿
-Cost     断言读的是**工作树**，所以"文件在盘上但没提交"也算通过；要卡住未提交的发货得换成 `git ls-files`，本轮不扩这条范围。§13 那条现在准确了：已知无人守的只剩**分支名**一项，且人工核对是一条命令（`origin` 自本轮起是 SSH 地址，`git ls-remote --symref origin HEAD` 在本机直接可用）
+Symptom  after D-057 took in the fifth slot, that URL was still only compared by **host + repo name**: the `/blob/master/CHANGELOG.md` half-path was bare. And in §13 I only admitted "the branch name is unguarded" — **actually the path is unguarded too**, an account that misrecorded its own coverage. All three of the missed edits would pass L0 green: copying upstream's `docs/changelog.md` wording back into the path, writing the blob link as the repo root, and renaming our own `CHANGELOG.md` — the third is the most real, because it does not even need the URL touched
+Change   `test/prefs-attribution.test.mjs` gains case 5: split the link into `/blob/<ref>/<path>`, require `<path>` to be **really readable in this repo**, non-empty, and to contain the `# CHANGELOG` heading (the toast promises a changelog, not just any document); also explicitly reject absolute paths and `..`, or "a file was read" would not mean "we ship it". The `<ref>` (branch name) is **still not asserted**, the reason written in the assertion comment and in §13: a CI checkout has no trustworthy source for "what this repo's default branch is called", and stuffing a field into the repo for this would decide half that question
+Evidence the gate was written first and was green on the spot (the current URL resolves to `CHANGELOG.md`, readable, has the heading), then **three injections each hit the same assertion with different messages** (a fresh /tmp copy each time, deleted after): path changed to `docs/changelog.md` → red and prints `sends the user to "docs/changelog.md" on branch "master", but the repository has no such file … ENOENT`; the whole URL changed to the repo root → red on `"…" is not a /blob/<ref>/<path> link`; renaming the copy's `CHANGELOG.md` to `CHANGES.md` while **not touching the URL** → red back on the first message (this one is the most valuable of the three, proving the criterion really lands on our tree rather than on string shape). All three red on this one case only, the other 5 green as usual. On the first batch-injection run the third case produced no output (`ls -d` reported 0 leftovers), and only a separate re-run gave the conclusion — a batch script "printing less" is not "executing less", it must be re-checked separately. L0 suite **88/88**, `npm run check`, `check:log` all green
+Cost     the assertion reads the **working tree**, so "file on disk but not committed" also passes; to catch uncommitted shipping it would have to switch to `git ls-files`, not widened this round. §13's item is now accurate: the only known-unguarded thing left is the **branch name**, and the manual check is one command (`origin` has been an SSH address since this round, `git ls-remote --symref origin HEAD` works directly on this machine)
 Commit   0688540
 
 ### D-062 · 2026-10-10 · chore · v48
-Symptom  刚写完 D-061 就发现自己留下两处"文档在讲一条它自己不再执行的规则"。① `docs/maintenance/measurement.md` §12 的认证行说"认证之后**只应有记录这次认证的 docs 提交**"，可 D-061 这笔是 `test/` 里的门——照字面读，下一会话会以为出现了违规、进而去重跑一轮 L1，而那正是 D-059 刚用一次白跑否掉的行为。② §13 里我写"`origin` 自本轮起是 SSH 地址"：`origin` 用 https 还是 SSH 是**各人本机 config**，把这种事实写进会被别人读到的文档，等于给读者一条假承诺
-Change   ① 认证行改成只讲判据本身：**动到 `extension.js` / `src/` / `resources/shaders/` 才重跑**，其余（docs、`test/` 里的 L0 门、`prefs.js`、图标、`.ui`）都不构成重跑理由，并明说"认证之后落的多半正是这一类提交"。② §13 那句改成环境中立的表述：核对默认分支的命令是 `git ls-remote --symref origin HEAD`，**只有 remote 为 SSH 形态时它才有结果**（这台机器 https 形态连 `github.com:443` 静默挂死），并保留 2026-10-10 实测到的 `ref: refs/heads/master`
-Evidence 两处都是纯文本改动，`npm test` **88/88**（含 D-061 那条新门）、`npm run check`、`check:log` PASS；改前先用 `grep -n "此后只应有记录这次认证的 docs 提交"` 定位、改后再 grep 确认旧句已不在文件里。本机 remote 也已按用户指示切到 SSH 并双向验证：`git ls-remote --symref origin HEAD` 有结果（`ref: refs/heads/master` + tip sha），`git push --dry-run origin master` 回 `Everything up-to-date`（写路径通，且这次确实没有对象被推走）
-Cost     这是把我写的规则从"观察"改回"判据"，没有代码、没有可回退义务。**留一条给下一会话**：`origin` 的传输形态属于本机配置，任何入库文档都不许再依赖它；要写就写"SSH 形态可用、https 形态在本机静默挂死"这种两侧都真的说法。另外这一条自己犯了它所修的同类错：我第一次把 Commit 写成了一个**根本没跑出来的 sha**（`097b424`，实际应为 `09fe7bc`），而 `check:log` 的 3 号检查当场把它判死——我却是在**已经提交并推送之后**才看到那条红，因为我用了 `check:log | grep` 判断，`&&` 链上生效的是 grep 的状态不是它的（本机记过同类坑：zsh 的 `$pipestatus`）。规则重申：**门禁命令一律不带管道**，`npm run check:log > /tmp/x.log 2>&1; echo rc=$?` 之后读 rc，再决定能不能 commit
+Symptom  right after writing D-061 I found I had left two places where "the doc states a rule it no longer follows". ① `docs/maintenance/measurement.md` §12's certification row says "after certification there should **only be** the docs commit recording this certification", but D-061 is a `test/` gate — read literally, the next session would think a violation occurred and re-run an L1 round, exactly the behaviour D-059 had just refuted with one wasted run. ② in §13 I wrote "`origin` has been an SSH address since this round": whether `origin` uses https or SSH is **each person's local config**, and writing that into a doc others read gives the reader a false promise
+Change   ① rewrite the certification row to state only the criterion itself: **re-run only when `extension.js` / `src/` / `resources/shaders/` are touched**, everything else (docs, `test/`'s L0 gates, `prefs.js`, icons, `.ui`) is no reason to re-run, and say plainly "what lands after certification is mostly exactly this kind of commit". ② rewrite that §13 sentence to an environment-neutral form: the command to check the default branch is `git ls-remote --symref origin HEAD`, **which only gives a result when the remote is SSH** (on this machine the https form silently hangs on `github.com:443`), and keep the `ref: refs/heads/master` measured on 2026-10-10
+Evidence both are plain text changes, `npm test` **88/88** (including D-061's new gate), `npm run check`, `check:log` PASS; located the old sentence with `grep -n "此后只应有记录这次认证的 docs 提交"` before, and grep-confirmed it gone after. The local remote has also been switched to SSH per the user's instruction and verified both ways: `git ls-remote --symref origin HEAD` returns a result (`ref: refs/heads/master` + tip sha), `git push --dry-run origin master` returns `Everything up-to-date` (the write path works, and this time indeed no object was pushed away)
+Cost     this changes a rule I wrote from "observation" back to "criterion", no code, no revert obligation. **One note for the next session**: `origin`'s transport form is local config and no committed doc may depend on it again; write "SSH works, https silently hangs on this machine" — a claim true on both sides. Also, this entry committed the very class of error it fixes: I first wrote the Commit as a sha that **never existed** (`097b424`, really `09fe7bc`), and `check:log`'s check 3 killed it on the spot — but I saw that red only **after committing and pushing**, because I judged with `check:log | grep`, and what took effect on the `&&` chain was grep's status, not its own (the same trap is recorded here: zsh's `$pipestatus`). Rule restated: **never pipe a gate command**; run `npm run check:log > /tmp/x.log 2>&1; echo rc=$?`, read rc, then decide whether to commit
 Commit   09fe7bc
 
 ### D-063 · 2026-10-10 · guard · v48
-Symptom  D-059 那次锚点重走是**一次性的** python heredoc：结论"29 个锚点、0 死"进了台账，却没进任何门，而 AGENTS.md 里那条规则的原文恰恰是"没人检查它们"。更要紧的是那次重走**按形状筛**——它只数带文件名的 `file:line`，于是 `docs/maintenance/shell-internal-api.md` 的 `extension.js` 函数表里三个**只有行号没有文件名**的引用压根没被数到。"0 死"与"三条已经烂掉"同时成立，正是因为同一份证据用同一个口径量了两遍：漏掉的那一类恰好是最容易烂的那一类（没有文件名，任何按 `file:line` 写的 grep 都看不见它）。本轮把那三个行号取回真址：它们指向的调用其实在 `extension.js:1240` / `extension.js:1242` / `extension.js:1259`，而原先给的三行分别是 `} else {`、`}` 和一个空行
-Change   新增 `test/doc-anchors.test.mjs`（6 条）。判据三条：① 锚点点名的文件在本仓库存在——先按仓库相对路径，再按**唯一** basename（两张表都是只写类名引特效文件，如 `Doom.js:55`；同名多份就**拒判**，不猜是哪一份）；② 点名的行不越界且**非空行**（空行就是漂移的指纹）；③ **不许出现只写行号不写文件**的引用。范围与理由写在测试抬头：`CHANGELOG.md` 不扫（台账是"提交当时"的断言，拿今天的树去校历史会把对的结论判成红）；`reports/` 不扫（gitignore，fresh clone 里没有）；`.js` 注释里的锚点不扫（`extension.js` 会引上游 shell 的 `workspace.js` / `windowPreview.js`，本树里没有这些文件，扫它们等于要手维护一份"这是谁的文件"的白名单——那正是这套门一直在避免的期望值）。同时把 5 处裸行号补上文件名，其中 3 处重新取址
-Evidence 门**先红后绿**：写完当场 1 红 5 条（`MAINTENANCE.md` 2 处、`shell-internal-api.md` 3 处）；真址用 `grep -n '_mapWindowDone\|_destroyWindowDone\|_lookupIndex' extension.js` 取回，并确认第 1259 行在 `_shouldDestroy()` 体内；改完后 6/6 绿。**七次注入**，每次新建一个 `/tmp` 干净副本（`tar --exclude=.git`）、跑完即删、**逐个读日志**而不是共用一个：A 把 `src/Shader.js:28` 抬到 99999 → 红在"行不越界"；B 先让脚本找出 `src/utils.js` 的空行号（第 104 行）再把 `src/utils.js:141` 改指它 → 红在"非空行"；C `mv src/ShaderFactory.js` → 红在"文件存在"；D 把修好的引用改回裸行号 → 红在"不许裸行号"并打印正确消息；E 在 `docs/dup/` 复制一份 `Doom.js` 造出 basename 歧义 → 同时红在"文件存在（歧义）"与 resolver 的单元断言；F 把门里的扩展名类改成永不匹配 → 红在**两条控制**（锚点下限、"台账若被扫会有命中"），证明控制不是摆设；G 把我第一版 AGENTS.md 散文原样放回副本 → 红在**两个分支**（3 处裸行号 + `workspace.js:1090` 不在本仓库）。清理一律用 `/bin/rm -rf`（裸 `rm` 在这台机器被 gio 拦成"系统内部挂载不支持回收站"，会留下副本），事后 `ls -d /tmp/bmw-anchor.*` 为 0。全量 L0：`npm run check` rc=0、`npm test` **94/94**（原 88，+6 全部来自这道门）、`npm run check:log` PASS（62 条 / 55 个 sha）。当前口径（python 与 grep 两种数法对上同一个数）：**8** 份 markdown、**35** 处锚点、逗号列表展开后 **42** 个行号检查、**0** 处裸行号；`CHANGELOG.md` 若被扫会贡献 2 处——这正是"排除是决定而不是失明"那条控制的依据
-Cost     它能看见的边界要说清，免得下一会话把它读成"锚点都对"：落在**真实非空行**但已不含所声称符号的锚点它判绿——本轮那两个 `}` 就属于这一类，它们之所以被发现，只因为它们当时是裸行号；`.js` 注释里的锚点仍无人守（本轮手走过一遍，`src/Shader.js:139` 与 `src/Shader.js:150,164` 等都还准），所以 AGENTS.md 那条规则只从"没人检查"改成"文档有人检查、注释仍要手走"；它读的是**工作树**，盘上存在但没提交的文件也算通过（与 D-061 那条同类局限）。**本轮不触发 L1 重跑**，判据是 `docs/maintenance/measurement.md` §12 那条"动到 `extension.js` / `src/` / `resources/shaders/` 才重跑"（D-059 立、D-062 改写），本次改动只有 `test/` 与 markdown。台账这条是 `guard`：回退就是删一个测试文件、把那段散文改回去。另一条**我自己的流程账**：G 那次注入是事后补的——我先按对正则的推断改写了 AGENTS.md 散文，**没跑门**就把它当成"门咬到作者"写进了叙述；补跑之后结论没变（确实两个分支都红），但顺序是错的，规则重申：**任何"门抓到了 X"都必须有一次真实运行**，静态推断只能写成推断
+Symptom  D-059's anchor re-walk was a **one-off** python heredoc: the conclusion "29 anchors, 0 dead" went into the ledger but not into any gate, while AGENTS.md's rule literally said "nobody checks them". More importantly, that re-walk **filtered by shape** — it counted only `file:line` with a file name, so the three **number-only** citations in `docs/maintenance/shell-internal-api.md`'s `extension.js` function table were not counted at all. "0 dead" and "three already rotten" held at once, precisely because the same evidence was measured twice with the same instrument: the missed class is exactly the one that rots first (no file name, so any grep written for `file:line` cannot see it). This round took those three line numbers back to their true addresses: the calls they point at are really at `extension.js:1240` / `extension.js:1242` / `extension.js:1259`, while the three originally given were `} else {`, `}`, and a blank line
+Change   new `test/doc-anchors.test.mjs` (6 cases). Three criteria: ① the file an anchor names exists in this repo — by repo-relative path first, then by **unique** basename (both tables cite effect files by class name only, e.g. `Doom.js:55`; with multiple same-named files it **refuses**, never guesses which); ② the named line is in range and **not blank** (a blank line is the fingerprint of drift); ③ **no citation may give a line number without a file**. Scope and reasons are in the test header: `CHANGELOG.md` is not scanned (the ledger asserts "as of its commit"; checking history against today's tree would turn correct conclusions red); `reports/` is not scanned (gitignored, absent from a fresh clone); anchors in `.js` comments are not scanned (`extension.js` cites upstream shell's `workspace.js` / `windowPreview.js`, which are not in this tree; scanning them would need a hand-maintained "whose file is this" allowlist — exactly the expectation this suite has always avoided). Also added the file name to 5 bare line numbers, re-taking the address for 3 of them
+Evidence the gate **red first, green after**: on writing it, 1 red out of 5 (`MAINTENANCE.md` 2 places, `shell-internal-api.md` 3 places); the true addresses were taken back with `grep -n '_mapWindowDone\|_destroyWindowDone\|_lookupIndex' extension.js`, confirming line 1259 is inside `_shouldDestroy()`; after the fix 6/6 green. **Seven injections**, each a fresh `/tmp` copy (`tar --exclude=.git`), deleted after each run, **each log read individually** rather than sharing one: A raise `src/Shader.js:28` to 99999 → red on "line in range"; B have the script find `src/utils.js`'s blank line number (line 104) and repoint `src/utils.js:141` at it → red on "not blank"; C `mv src/ShaderFactory.js` → red on "file exists"; D revert the fixed citation to a bare line number → red on "no bare line numbers" and prints the right message; E copy a `Doom.js` into `docs/dup/` to create a basename ambiguity → red on both "file exists (ambiguous)" and the resolver's unit assertion; F change the gate's extension class to never match → red on **both controls** (the anchor floor and "the ledger would hit if scanned"), proving the controls are not decoration; G put my first AGENTS.md prose back verbatim into the copy → red on **both branches** (3 bare line numbers + `workspace.js:1090` not in this repo). Cleanup always with `/bin/rm -rf` (bare `rm` on this machine is intercepted by gio as "system-internal mounts do not support trash" and leaves the copy behind), afterwards `ls -d /tmp/bmw-anchor.*` was 0. Full L0: `npm run check` rc=0, `npm test` **94/94** (was 88, +6 all from this gate), `npm run check:log` PASS (62 entries / 55 shas). Current count (python and grep agree): **8** markdown files, **35** anchors, **42** line-number checks after comma lists are expanded, **0** bare line numbers; `CHANGELOG.md` would contribute 2 if scanned — which is the basis for the "exclusion is a decision, not blindness" control
+Cost     its visible boundary must be stated, so the next session does not read it as "all anchors are right": it passes an anchor that lands on a **real non-blank line** but no longer contains the claimed symbol — this round's two `}` are that class, and they were only found because they were bare line numbers at the time; anchors in `.js` comments are still unguarded (walked by hand this round, `src/Shader.js:139` and `src/Shader.js:150,164` etc. are still accurate), so AGENTS.md's rule only changed from "nobody checks" to "the docs are checked, comments still need a hand-walk"; it reads the **working tree**, so a file on disk but not committed also passes (the same limitation as D-061). **This round triggers no L1 re-run**, the criterion being `docs/maintenance/measurement.md` §12's "re-run only when `extension.js` / `src/` / `resources/shaders/` are touched" (set by D-059, rewritten by D-062), and this change is only `test/` and markdown. The ledger entry is `guard`: reverting means deleting one test file and putting that prose back. One more **process debt of my own**: injection G was added after the fact — I first rewrote the AGENTS.md prose on an inference about the regex and wrote it into the narrative as "the gate bit its author" **without running the gate**; after the extra run the conclusion was unchanged (both branches really did go red), but the order was wrong, and the rule is restated: **any "the gate caught X" must have a real run**; a static inference can only be written as an inference
 Commit   08e5227

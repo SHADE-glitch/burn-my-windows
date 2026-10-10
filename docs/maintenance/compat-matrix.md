@@ -1,33 +1,38 @@
-# 兼容分支矩阵与版本门控
+# Compatibility branch matrix and version gating
 
-本页是 burn-my-windows@local 三张长期资产页之一，从 `MAINTENANCE.md` 拆出（原 MAINTENANCE §6），
-那里现在只留一行路由，正文只在这里维护。它回答的问题是：fork 踩在 GNOME Shell 私有接口上的
-**8 处兼容分支**各自探测哪个 API、在 GNOME 50 上实际走哪条、某一行翻转的后果是什么，
-以及版本门控本身（`src/utils.js` 的 `shellVersionIs()` / `shellVersionIsAtLeast()` 与每特效的
-`static getMinShellVersion()`）为什么升到 GNOME 51 也不需要改。**动手之前先读
-[MAINTENANCE.md](../../MAINTENANCE.md) §3（隔离 headless shell 的边界）与 [AGENTS.md](../../AGENTS.md)
-（给 agent 的硬规则）**：这张表是由探针 01 的 `compat-matrix` 在沙箱里重测的，
-绕过沙箱去动分支，既会污染真实会话，也会让比对本身失去意义。
+This page is one of burn-my-windows@local's three long-term asset pages, split out of
+`MAINTENANCE.md` (the original §6); that file now keeps only a router line, and the body is
+maintained only here. It answers: which API each of the fork's **8 compatibility branches** that sit
+on GNOME Shell private interfaces probes, which one GNOME 50 actually takes, what the consequence of
+a row flipping is, and why version gating itself (`shellVersionIs()` /
+`shellVersionIsAtLeast()` in `src/utils.js`, plus each effect's `static getMinShellVersion()`) needs
+no change even when moving to GNOME 51. **Before touching anything, read
+[MAINTENANCE.md](../../MAINTENANCE.md) §3 (the boundaries of the isolated headless shell) and
+[AGENTS.md](../../AGENTS.md) (the hard rules for agents)**: this table is re-measured in the sandbox
+by probe 01's `compat-matrix`, and touching a branch outside the sandbox both pollutes the real
+session and makes the comparison meaningless.
 
 ---
 
-## 6. 兼容分支矩阵：8 处，以及 GNOME 50 实际走哪条
+## 6. Compatibility branch matrix: 8 sites, and which GNOME 50 takes
 
-探针 01 的 `compat-matrix` 会把这 8 行重新测一遍并与期望值比对；某一行翻转是**响的**，
-提示你去读那条你刚开始走的分支（原来的 `if` 可能已变成死支）。
+Probe 01's `compat-matrix` re-tests these 8 rows and compares them with the expected values; a row
+flipping is **loud**, telling you to read the branch you have just started down (the old `if` may
+have become a dead branch).
 
-| 站点 | 探测的 API | GNOME 50 | 翻转的后果 |
+| Site | API probed | GNOME 50 | Consequence of a flip |
 | --- | --- | --- | --- |
-| `src/Shader.js:122` | `Clutter.Timeline.prototype.set_actor` | 存在 | 时间线不再跟随 actor，动画走错时钟 |
-| `src/Shader.js:136` | `Meta.disable_unredirect_for_display` | **不存在** → 走 else：`global.compositor.disable_unredirect()` | 全屏动画期间撕裂 |
-| `src/Shader.js:193` | `Meta.enable_unredirect_for_display` | **不存在** → 走 else：`global.compositor.enable_unredirect()` | unredirect 永不恢复（注意：这段用 `disable` 的存在来决定是否调 `enable`） |
-| `src/Shader.js:154` | `meta_window.is_maximized` | 存在（49 加入）→ 走 if | `uIsFullscreen` 错 → shader padding 错 |
-| `src/Shader.js:219` | `Cogl.SnippetHook` | 存在 → Cogl 分支 | 所有 shader 构造失败 |
-| `src/utils.js:141` | `shellVersionIsAtLeast(48,'beta')` | true → `St.ImageContent.set_data` 带 Cogl context | 5 个带贴图特效（paint-brush / matrix / broken-glass / snap / trex）纹理构造失败。**纠正**：`getImageResource()` 只在特效侧调用，`prefs.js` 完全不用它，所以旧写法"偏好设置预览图坏"是找错了人 |
-| `src/utils.js:198` | `shellVersionIsAtLeast(47,'alpha')` | true → `Cogl.Color.from_string` | `parseColor` 抛 → 特效发黑 |
-| `src/ShaderFactory.js:79` | `GObject.Object.new` | true（GJS 里几乎恒真，`newv` 是死支） | shader 根本构造不出来 |
+| `src/Shader.js:122` | `Clutter.Timeline.prototype.set_actor` | present | the timeline no longer follows the actor, the animation runs on the wrong clock |
+| `src/Shader.js:136` | `Meta.disable_unredirect_for_display` | **absent** → else: `global.compositor.disable_unredirect()` | tearing during fullscreen animations |
+| `src/Shader.js:193` | `Meta.enable_unredirect_for_display` | **absent** → else: `global.compositor.enable_unredirect()` | unredirect never restored (note: this block uses the presence of `disable` to decide whether to call `enable`) |
+| `src/Shader.js:154` | `meta_window.is_maximized` | present (added in 49) → if | `uIsFullscreen` wrong → shader padding wrong |
+| `src/Shader.js:219` | `Cogl.SnippetHook` | present → Cogl branch | every shader fails to construct |
+| `src/utils.js:141` | `shellVersionIsAtLeast(48,'beta')` | true → `St.ImageContent.set_data` takes a Cogl context | texture construction fails for the 5 textured effects (paint-brush / matrix / broken-glass / snap / trex). **Correction**: `getImageResource()` is called only on the effect side, and `prefs.js` never uses it, so the old wording "preferences preview image breaks" blamed the wrong caller |
+| `src/utils.js:198` | `shellVersionIsAtLeast(47,'alpha')` | true → `Cogl.Color.from_string` | `parseColor` throws → effects render black |
+| `src/ShaderFactory.js:79` | `GObject.Object.new` | true (almost always true in GJS; `newv` is a dead branch) | the shader cannot be constructed at all |
 
-版本门控本身在 `src/utils.js`：`shellVersionIs()` / `shellVersionIsAtLeast()`，
-喂 `Config.PACKAGE_VERSION`，比较器对任何更高的 major 都返回 true，**所以升到 GNOME 51
-不需要改它**。真正会隐形关掉一个特效的是**每特效**的门：`static getMinShellVersion()`
-（26 个里最高 `[40, 0]`），由 `prefs.js` 用来过滤列表项。
+Version gating itself lives in `src/utils.js`: `shellVersionIs()` / `shellVersionIsAtLeast()`, fed
+`Config.PACKAGE_VERSION`; the comparator returns true for any higher major, **so moving to GNOME 51
+needs no change to it**. What silently disables an effect is the **per-effect** gate:
+`static getMinShellVersion()` (highest of the 26 is `[40, 0]`), used by `prefs.js` to filter the list
+rows.
