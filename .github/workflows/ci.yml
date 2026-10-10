@@ -31,3 +31,7 @@ jobs:
       - run: npm test
       - run: npm run check
       - run: npm run check:log
+      # Coverage reading (not a gate): Node's built-in coverage over the L0
+      # suites. No threshold, so it cannot fail the run — and for this repo the
+      # product table is empty, because nothing shipped is Node-loadable.
+      - run: npm run test:coverage
