@@ -5,7 +5,7 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "test:coverage": "node --experimental-test-coverage --test-coverage-exclude='**/test/**' --test test/*.test.mjs",
+    "test:coverage": "node --experimental-test-coverage --test test/*.test.mjs",
     "check": "node --check extension.js && node --check prefs.js && find src -name '*.js' -exec node --check {} +",
     "check:log": "node scripts/check-log.mjs"
   }
