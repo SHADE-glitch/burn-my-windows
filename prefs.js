@@ -460,7 +460,7 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
         changelogAction.connect('activate', () => {
           Gtk.show_uri(
             null,
-            'https://github.com/Schneegans/Burn-My-Windows/blob/main/docs/changelog.md',
+            'https://github.com/SHADE-glitch/burn-my-windows/blob/master/CHANGELOG.md',
             Gdk.CURRENT_TIME);
           this._settings.set_int('last-prefs-version', this.metadata.version)
         });
@@ -604,38 +604,38 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
   }
 
   // Connects an Adw.ComboRow (or anything else which has an 'selected' property) to a
-  // settings key. It also binds the corresponding reset button.
+  // settings key. It also feeds `_finishBinding()`.
   bindComboRow(settingsKey) {
     this._bind(settingsKey, 'selected');
   }
 
   // Connects a Gtk.ComboBox (or anything else which has an 'active' property) to a
-  // settings key. It also binds the corresponding reset button.
+  // settings key. It also feeds `_finishBinding()`.
   bindComboBox(settingsKey) {
     this._bind(settingsKey, 'active');
   }
 
   // Connects a Gtk.Entry (or anything else which has an 'text' property) to a
-  // settings key. It also binds the corresponding reset button.
+  // settings key. It also feeds `_finishBinding()`.
   bindEntry(settingsKey) {
     this._bind(settingsKey, 'text');
   }
 
   // Connects a Gtk.Adjustment (or anything else which has a 'value' property) to a
-  // settings key. It also binds the corresponding reset button.
+  // settings key. It also feeds `_finishBinding()`.
   bindAdjustment(settingsKey) {
     this._bind(settingsKey, 'value');
   }
 
   // Connects a Gtk.Switch (or anything else which has an 'active' property) to a settings
-  // key. It also binds the corresponding reset button.
+  // key. It also feeds `_finishBinding()`.
   bindSwitch(settingsKey) {
     this._bind(settingsKey, 'active');
   }
 
   // Colors are stored as strings like 'rgb(1, 0.5, 0)'. As Gio.Settings.bind_with_mapping
-  // is not available yet, we need to do the color conversion manually. It also binds the
-  // corresponding reset button.
+  // is not available yet, we need to do the color conversion manually. It also feeds
+  // `_finishBinding()`.
   bindColorButton(settingsKey) {
 
     const button = this._builder.get_object(settingsKey);
@@ -933,7 +933,7 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
   }
 
   // Connects any widget's property to a settings key. The widget must have the same ID as
-  // the settings key. It also binds the corresponding reset button.
+  // the settings key. It also feeds `_finishBinding()`.
   _bind(settingsKey, property) {
     const object = this._builder.get_object(settingsKey);
 
