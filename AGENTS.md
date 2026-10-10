@@ -94,7 +94,7 @@ fork of Burn-My-Windows, used in place with no install step.
     gates (widget-tree degradation, per-effect reset, row descriptions, attribution).
     Adding a file needs no other edit — the glob and CI both pick it up. Run L0 before
     claiming anything about **any** change.
-- `npm run test:coverage` — the same L0 `test/*.test.mjs` under Node's built-in coverage (`--experimental-test-coverage`), test files excluded. A **reading, not a gate** (no threshold). It comes back **empty**: nothing this repo ships is Node-loadable (all of `src/` and `extension.js` are shell-bound), so there is no product file for Node coverage to report.
+- `npm run test:coverage` — the same L0 `test/*.test.mjs` under Node's built-in coverage (`--experimental-test-coverage`). The report lists the test files and their `test/lib/` helpers; nothing this repo ships is Node-loadable (all of `src/` and `extension.js` are shell-bound), so no product row appears. A **reading, not a gate** (no threshold).
   - **L1** `./test/headless/run.sh all` — real GNOME Shell process, fully sandboxed,
     minutes. The only layer that can prove private-API existence, shader/uniform
     resolution, the `_mapWindow@` take-over branch on a genuine SpiderMonkey stack, and
