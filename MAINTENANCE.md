@@ -322,13 +322,17 @@ GType 是否稳定、disable 后有没有残留、dispose 竞态会不会抛、�
   影响是"新增一个写错的 `.frag` 时报错位置难读"，不参与本轮修复。
 - 偏好对话框的 About 与"每开 10 次提示一次"的捐赠弹窗**仍属于上游**（`set_developer_name`、
   `set_copyright`、license、四个 `donate-*`、`show-sponsors`、`translate` 与 `metadata.json:donations`
-  一概不动），而**报障去处**（菜单 `homepage` / `bugs`，About 的 `set_website` / `set_issue_url`）
-  已指回本仓库，与 `metadata.json:url` 一致。两个方向都有门守着：`test/prefs-attribution.test.mjs`
+  一概不动），而**去处类槽位**（菜单 `homepage` / `bugs`，About 的 `set_website` / `set_issue_url`，
+  以及 `changelog` 动作打开的地址）**这五个**全部指回本仓库，与 `metadata.json:url` 一致。最后一个是
+  补上的：扩展版本变化后弹出的 toast 引导用户去读的正是它，而本 fork 的变更只记在本仓库 `CHANGELOG.md`
+  里，上游的那份说不出"你的这个特效为什么变了"。门在两个方向上都有：`test/prefs-attribution.test.mjs`
   从 README 的 `git clone` 行与 `**Upstream:**` 行取期望地址，所以改写 README 那两行的**形状**
-  会让它红在"取不到地址"而不是红在归属上。详见 CHANGELOG 的 D-051 / D-052。
-- **`changelog` 动作仍打开上游的 `docs/changelog.md`**，而扩展版本变化后弹出的 toast 引导用户去读的
-  正是它；本 fork 的变更记在本仓库 `CHANGELOG.md`。Q4 只批了 website/issues 两处，改这条属于扩大
-  范围，**待你决定**。本轮也没有为它加门 —— 加了就等于替这个决定做掉。
+  会让它红在"取不到地址"而不是红在归属上；五个槽位的**数量**也被同一扇门钉住——多一个说明清扫越界
+  改到了仍属上游的文档，少一个说明漏改。详见 CHANGELOG 的 D-051 / D-052 / D-056。
+- **`changelog` 那个 URL 里的分支名不在门的覆盖范围内**：断言是 `startsWith(forkUrl())`，只比 host
+  与仓库名，`/blob/master/CHANGELOG.md` 的 `master` 靠人肉核对（当时 `git ls-remote --symref origin HEAD`
+  指到 `refs/heads/master`）。默认分支若改名，菜单项与更新 toast 会一起打到 404，而 L0 全绿。
+  没有把它做成门：门要读分支名，而仓库里没有任何已提交产物记录它——加一个字段等于替这个决定先做掉一半。
 - 沙箱里 `gjs` GTK4 客户端只证明"能开窗、能关窗、动画被接管"，不证明 GTK 应用在你机器上的其他行为。
 - **文档路由门不区分正文与引文**：它扫每一行 markdown 里的节号引用，所以**举一个坏例子也会被当成一次
   真引用**并让门变红。规避办法是要么在引文里不写节号，要么让引文里的节号紧挨它自己的文件名；

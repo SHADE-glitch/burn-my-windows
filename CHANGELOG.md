@@ -406,3 +406,24 @@ Change   收集时就排除 `-enable-effect`，与说明句用的同一个后缀
 Evidence 发现与复验都在真实运行时：① 真窗口里点 Glide 的按钮，用备份前后 keyfile 的 diff 取证（只少那两行，其余 25 行逐字不变），测完按备份 byte-identical 还原（`sha256sum` 与测试前一致）；② 从 prefs.js 原样切出 `_bindResetButton` / `_resetEffect` 对**真的** keyfile GSettings 跑：重置后 `fire-enable-effect=false` 仍在文件里、`fire-animation-time` 与 `fire-color-1` 被清、`wisps-*` 未动；③ 空集合路径在同一次脚本里实测抛出上述 TypeError。先红后绿：改期望 → 5 红（新用例的失败消息直接写出"which animation plays for every window"）→ 改实现 → 9/9；门本身的注入（把某特效的 `bindPreferences` 清空）精确红在第 9 条。L0 全套 87/87
 Cost     这是**行为修正**，不是扩展：重置的含义收窄成"这个特效声明过的选项"。双语 README 同步写明开关不在范围内。另外本轮的实测跨两次 shell（07:47 与 08:03 各一次，后者是机器又重启过），两边跑的都是同一份磁盘代码，结论不受影响；D-047 里"键集合恰好等于该特效声明的"那句作为当时事实保留不改
 Commit   0e99c80
+
+### D-056 · 2026-10-10 · taste · v48
+Symptom  菜单的「View Changelog」与扩展版本变化后弹出的 toast 打开的是**上游仓库**里的 changelog。这一项和 D-051 那四处不同：那四处是"issue 落在没有这份代码的 tracker"，这一处是**必然**答非所问——toast 由本 fork 的 `metadata.json:version` 触发，用户跟着点进去，读到的文档里一条本 fork 的变更都没有。Q4 当时只批了 website / issues 两处，所以这条被我记成「待你决定」挂在 `MAINTENANCE.md` 的「已知不修 / 待确认」里；本轮按"剩下的问题按推荐处理"关掉它
+Change   地址换成本仓库的 `CHANGELOG.md`。归属分界线一字不动：**读这份代码的人该看到什么**归本 fork，署名 / 许可证 / 捐赠 / 翻译队列归上游——所以这是第五个槽位，不是把范围再往外扩一寸
+Evidence 换址前先确认落点不是我自己臆想的：`git symbolic-ref refs/remotes/origin/HEAD` → `refs/remotes/origin/master`（默认分支确实是 `master`，上游那份是 `main`，照抄上游路径会 404）；`git cat-file -e origin/master:CHANGELOG.md` 成立；抓取渲染页得到 "Repository: burn-my-windows / First heading: CHANGELOG — burn-my-windows@local"。顺带查明一件事：基线导入 `16ab10a` 的顶层只有 `LICENSE extension.js locale metadata.json prefs.js resources schemas src`——`docs/` 从来不在我们的树里，旧链接指向的一直是上游仓库网页，所以"本仓库缺那份文件"不可能是回归。L0 全套 87/87
+Cost     归属改动，不是修复：对原样跑 upstream v48 的人，旧地址仍然正确；本 fork 若哪天不再维护，这五处要一起改回去。另有一条**门看不见的耦合**：URL 里的分支名 `master` 靠上面的命令核对，不是由断言守着，记在 `MAINTENANCE.md` 的「已知不修 / 待确认」
+Commit   f976433
+
+### D-057 · 2026-10-10 · guard · v48
+Symptom  D-052 的门**刻意不含** changelog——那时决定还没拍，加门等于替它做掉。拍板之后第五个槽位就落在门外面：上游升级把这一行带回 `Schneegans/Burn-My-Windows`，或有人整串清扫时把它算进去，都不会有检查变红
+Change   `test/prefs-attribution.test.mjs` 的"报障去处"从四个地址收到五个，新增取件器 `changelogUrl()`。这一项不走 `addURIAction`，URL 在 `Gtk.show_uri(null, …)` 里，取件器形状因此不同，但同样带"取不到就红"的断言（动作被删 / 不再打开网址，都红在取件器上而不是红在期望值上）。清扫那条由"恰好 4 次"收到"恰好 5 次"
+Evidence 先红后绿：门先扩、代码未改时 5 条里 2 红（第 2 条把实际地址与期望地址都打印出来，第 5 条报 4≠5），其余 3 条当场绿——红的是该红的两条，不是全部。两次注入各命中该守的一半（每次一个全新 /tmp 副本，做完即弃）：把 changelog 换回上游 → 红第 2、5 条；再把 `new-effect` 与 `wallpapers` 一起扫成 fork → **只**红第 5 条，因为那两个 URL 本来就不在断言名单里，越界只能靠计数发现
+Cost     第 2 条按 `startsWith(forkUrl())` 判，只比 host + 仓库名，`/blob/master/CHANGELOG.md` 这段路径与分支不在断言里（就是 D-056 记的那条耦合）。计数写成"恰好 5"是有意的：将来加第六个槽位必须同时改期望值，而多一个槽位就是一次新的归属决定，不该被一次编辑顺手带过
+Commit   f976433
+
+### D-058 · 2026-10-10 · chore · v48
+Symptom  D-047 把 reset 与说明句收进 `_finishBinding()` 之后，七个 bind helper 的注释还写着 "It also binds the corresponding reset button"。这句话今天为假：它们只把键交给汇聚点，真正的绑定在 `_finishBinding()` 里。注释指错地方，下一个人会去 `_bind` 中找一段已经不存在的代码
+Change   七处改成 "It also feeds `_finishBinding()`."（六处原本就是一行，`bindColorButton` 那句原本跨三行、现在跨两行）。方法名带反引号，便于 grep
+Evidence `grep -c "It also feeds" prefs.js` = 7；全仓搜残留说法 `grep -rn "binds the corresponding" --exclude-dir=.git --exclude-dir=reports .` 输出为空；`node --check prefs.js` 通过。这条是**本轮改址时顺手走到的**：为核对第 5 个槽位把七个 helper 都读了一遍，才看见第七处（`bindColorButton`）在上一轮被漏掉
+Cost     纯注释，无行为改动，升级时可整体丢弃。失真源头是我自己前一轮的汇聚点改造，不是上游——那句注释在它原本的代码里是对的
+Commit   f976433
