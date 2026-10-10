@@ -206,9 +206,9 @@ fork of Burn-My-Windows, used in place with no install step.
   `MAINTENANCE.md` §1). The numbers are the *original* ones and are **never renumbered** —
   cross-references depend on them, and `test/docs-links.test.mjs` fails any `§N` that does not
   resolve to a heading with content in the file it names.
-- Commit code first, docs in a separate commit. Commit messages use **Chinese subjects
-  with English conventional-commit prefixes** — `feat:` / `fix:` / `perf:` / `guard:` / `test:` /
-  `docs:` / `chore:`, optionally scoped (`fix(test):`). The list is what the history actually uses;
+- Commit code first, docs in a separate commit. Commit messages are **English throughout** — an
+  English subject with an English conventional-commit prefix — `feat:` / `fix:` / `perf:` / `guard:` /
+  `test:` / `docs:` / `chore:`, optionally scoped (`fix(test):`). The list is what the history actually uses;
   a new prefix means updating this line, not inventing a near-synonym.
 - Phase evidence (`PROFILE` / `AUDIT` / `PLAN` / `VERIFY` / `STATE`) lives in `docs/reports/`,
   which is **gitignored and local-only**: the point is that raw journal lines, window
