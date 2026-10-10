@@ -2,6 +2,7 @@
   "name": "burn-my-windows",
   "private": true,
   "type": "module",
+  "engines": { "node": ">=20" },
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "check": "node --check extension.js && node --check prefs.js && find src -name '*.js' -exec node --check {} +",
