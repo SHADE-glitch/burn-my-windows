@@ -1,6 +1,6 @@
 <p align="right"><a href="README.md"><b>English</b></a> | <a href="README.zh-CN.md">简体中文</a></p>
 
-# Burn My Windows — Local Maintenance Fork
+# 🔥 Burn My Windows — Local Maintenance Fork
 
 Disintegrate your windows with style.
 

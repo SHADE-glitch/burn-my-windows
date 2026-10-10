@@ -1,6 +1,6 @@
 <p align="right"><a href="README.md">English</a> | <a href="README.zh-CN.md"><b>简体中文</b></a></p>
 
-# Burn My Windows —— 本地维护分支
+# 🔥 Burn My Windows —— 本地维护分支
 
 让你的窗口以华丽的方式消散。
 
