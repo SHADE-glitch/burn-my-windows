@@ -399,3 +399,10 @@ Change   `test/prefs-reset-effect.test.mjs` 新增一条**扫调用点**的门�
 Evidence 实测 26 个特效文件、bind 调用全部在 `bindPreferences()` 内，当前没有漏网的。另一半也查了：`src/effects/*.js` 与 `src/*.js` 没有任何一处绕过 helper 直接 `Gio.Settings.bind(...)`（Fire.js 走 `getProfileSettings().reset/set_*` 是它自己的预设功能，不是绑定）。两次注入（各在一个全新的 /tmp 副本里，做完即弃）：把 Apparition 一行 `bindAdjustment` 挪进 `getNick()` → 红且消息点名 "Apparition.js: getNick()"；把扫描正则改成一个不存在的调用名 → 红在"scanned 26 effect file(s) and found 0 bind call(s)"那条控制上。L0 全套 85/85
 Cost     归属靠"两个空格缩进的类方法"，这是**本仓库的书写约定**不是语言规则：将来有人把方法写成别的缩进，那一行会被归为 `null` 从而变红（红得响，不会静默放行）。这条门守"调用点落在哪个方法"，仍不守"标记的置位与复位是否成对"——那一半靠 `_bindingEffect = null` 紧跟 `bindPreferences` 这一处写法保证，本轮没有为它单独造门
 Commit   22ed443
+
+### D-055 · 2026-10-10 · fix · v48
+Symptom  D-047 的每特效重置把 `<nick>-enable-effect` 也收进了集合。真实会话里按 AT-SPI 驱动偏好窗口按下橡皮擦后，配置档里消失的是两行：`glide-tilt` **和** `glide-enable-effect`。对 glide 无害（默认就是关），但 `fire-enable-effect` 是 26 个开关里唯一默认为 `true` 的（这条本身由 `build-freshness` 的门守着）——"把这个特效调回默认"于是会顺手把 Fire 打开，反向重置 paint-brush 会把它关掉，直接改掉"下一个窗口播哪个动画"，而一枚标着"重置"的按钮完全看不出自己有这个副作用
+Change   收集时就排除 `-enable-effect`，与说明句用的同一个后缀判据。开关留给用户自己翻。另外排除后理论上出现"某特效只绑开关"→ `_effectKeys[nick]` 从未建立 → `for (const key of undefined)` 抛 `can't access property Symbol.iterator`，抛在 prefs 进程里即 D-046 那一类。选择**加门不加 `?? []`**：新增"no effect can be left with an empty reset set"扫 26 个特效的 `bindPreferences()`，要求每个至少绑一个非开关选项（实测全部满足），将来违反即在 L0 红，而不是靠静默兜底把崩溃藏起来
+Evidence 发现与复验都在真实运行时：① 真窗口里点 Glide 的按钮，用备份前后 keyfile 的 diff 取证（只少那两行，其余 25 行逐字不变），测完按备份 byte-identical 还原（`sha256sum` 与测试前一致）；② 从 prefs.js 原样切出 `_bindResetButton` / `_resetEffect` 对**真的** keyfile GSettings 跑：重置后 `fire-enable-effect=false` 仍在文件里、`fire-animation-time` 与 `fire-color-1` 被清、`wisps-*` 未动；③ 空集合路径在同一次脚本里实测抛出上述 TypeError。先红后绿：改期望 → 5 红（新用例的失败消息直接写出"which animation plays for every window"）→ 改实现 → 9/9；门本身的注入（把某特效的 `bindPreferences` 清空）精确红在第 9 条。L0 全套 87/87
+Cost     这是**行为修正**，不是扩展：重置的含义收窄成"这个特效声明过的选项"。双语 README 同步写明开关不在范围内。另外本轮的实测跨两次 shell（07:47 与 08:03 各一次，后者是机器又重启过），两边跑的都是同一份磁盘代码，结论不受影响；D-047 里"键集合恰好等于该特效声明的"那句作为当时事实保留不改
+Commit   0e99c80

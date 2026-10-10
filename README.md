@@ -99,9 +99,11 @@ test harness, not for daily use, so turn it back off.
 
 **Undoing your own tuning.** Each effect row has a clear icon that resets **that effect's options** in
 the profile you are editing, and each individual option still has its own reset button in its row. One
-effect's button cannot reach another effect's keys, and neither button switches your profile. What is
-reset is whatever that effect declared for itself, so an option added later is covered without anyone
-remembering to register it.
+effect's button cannot reach another effect's keys, and neither button switches your profile. The clear
+icon does **not** touch the effect's on/off switch — that is deliberate: one effect's default is "on",
+so an "undo my tuning" button that also flipped switches would silently change which animation plays for
+every window. Flip the switch yourself, it is right next to the button. What is reset is whatever that
+effect declared for itself, so an option added later is covered without anyone remembering to register it.
 
 **What the rows explain.** Most option rows carry a one-line description. It is the text the setting
 itself already declares, read at runtime — nothing was written into the interface for the sake of this,
