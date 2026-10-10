@@ -850,7 +850,10 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
   // key when clicked.
   _bindResetButton(settingsKey) {
     // Record the key for the effect being wired up, which is what _resetEffect later resets.
-    if (this._bindingEffect) {
+    // The enable switch is deliberately left out of that set: its default is `true` for exactly
+    // one effect, so including it would let "undo my tuning" switch an effect on or off and
+    // change which animation plays for every window. The switch is right there to click itself.
+    if (this._bindingEffect && !settingsKey.endsWith('-enable-effect')) {
       if (!this._effectKeys[this._bindingEffect]) {
         this._effectKeys[this._bindingEffect] = new Set();
       }

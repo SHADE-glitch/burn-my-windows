@@ -66,11 +66,33 @@ test('an effect reset covers exactly the keys that effect wired up', () => {
   self._resetEffect('incinerate');
 
   assert.deepEqual(active.resets,
-    ['incinerate-enable-effect', 'incinerate-animation-time', 'incinerate-scale',
+    ['incinerate-animation-time', 'incinerate-scale',
      'incinerate-turbulence', 'incinerate-use-pointer', 'incinerate-color'],
     'the reset set is not the set this effect declared');
   assert.ok(!active.resets.some(k => k.startsWith('wisps-')),
     'resetting one effect touched another effect that shares no prefix');
+});
+
+test('the enable switch is not part of an effect reset', () => {
+  // Found by driving the real dialog: the button cleared `glide-enable-effect` along with the
+  // options. For glide that is invisible because its default is off, but `fire-enable-effect`
+  // is the one key whose default is `true` -- so "undo my tuning" would silently switch Fire
+  // back on, and resetting an effect the user switched on would switch it off. Either way the
+  // button would change *which animation plays*, which is not what it looks like it does.
+  const active = makeSettings('profile-A');
+  const {self} = makeEnv(active);
+
+  bindEffect(self, 'fire',
+    ['fire-enable-effect', 'fire-animation-time', 'fire-color-1', 'fire-movement-speed']);
+
+  self._resetEffect('fire');
+
+  assert.ok(!active.resets.includes('fire-enable-effect'),
+    `"reset this effect" also flips the effect on/off -- it would change which animation plays ` +
+    `for every window: ${active.resets.join(', ')}`);
+  assert.deepEqual(active.resets,
+    ['fire-animation-time', 'fire-color-1', 'fire-movement-speed'],
+    'the options this effect wired up must still all be reset');
 });
 
 test('the tv / tv-glitch prefix trap does not bite', () => {
@@ -85,7 +107,7 @@ test('the tv / tv-glitch prefix trap does not bite', () => {
 
   self._resetEffect('tv');
 
-  assert.deepEqual(active.resets, ['tv-enable-effect', 'tv-animation-time'],
+  assert.deepEqual(active.resets, ['tv-animation-time'],
     `resetting tv leaked into tv-glitch: ${active.resets.join(', ')}`);
 });
 
@@ -103,7 +125,7 @@ test('resetting writes to the profile being edited and to no other', () => {
   self._resetEffect('fire');
 
   assert.deepEqual(a.resets, [], 'a stale profile reference wrote into the previous profile');
-  assert.deepEqual(b.resets, ['fire-enable-effect', 'fire-animation-time'],
+  assert.deepEqual(b.resets, ['fire-animation-time'],
     'the active profile did not receive the resets');
 });
 
@@ -118,7 +140,7 @@ test('reloading a profile does not double-reset a key', () => {
   bindEffect(self, 'matrix', ['matrix-enable-effect', 'matrix-animation-time']);
 
   self._resetEffect('matrix');
-  assert.deepEqual(active.resets, ['matrix-enable-effect', 'matrix-animation-time'],
+  assert.deepEqual(active.resets, ['matrix-animation-time'],
     `expected one reset per declared key, got ${active.resets.length}`);
 });
 
@@ -129,7 +151,7 @@ test('a key whose row has no per-option button is still covered', () => {
   bindEffect(self, 'glide', ['glide-enable-effect', 'glide-animation-time']);
   self._resetEffect('glide');
 
-  assert.deepEqual(active.resets, ['glide-enable-effect', 'glide-animation-time'],
+  assert.deepEqual(active.resets, ['glide-animation-time'],
     'coverage was gated on the existence of the per-option reset button, so an option would ' +
     'survive a "reset this effect"');
 });
@@ -185,4 +207,36 @@ test('an effect binds its options where the marker is up', () => {
   assert.deepEqual(offenders, [],
     `these bind calls are outside bindPreferences(), so their keys reach no "reset this `
     + `effect": ${offenders.join(', ')}`);
+});
+
+test('no effect can be left with an empty reset set', () => {
+  // _resetEffect() iterates the set directly. Excluding the enable switch makes an *empty* set
+  // reachable in principle: an effect that binds nothing but its own switch would leave
+  // `_effectKeys[nick]` undefined, and `for (const key of undefined)` throws inside the dialog --
+  // the same crash class B7-a was about. So this is asserted, not assumed.
+  const dir = path.join(ROOT, 'src/effects');
+  const empty = [], unreadable = [];
+  let files = 0;
+
+  for (const entry of readdirSync(dir).sort()) {
+    if (!entry.endsWith('.js')) continue;
+    files++;
+    const body = /  static bindPreferences\(dialog\) \{([\s\S]*?)\n  \}/
+      .exec(readFileSync(path.join(dir, entry), 'utf8'));
+    if (!body) { unreadable.push(entry); continue; }
+
+    const bound = [...body[1].matchAll(/dialog\.bind[A-Za-z]*\('([^']*)'/g)].map(([, k]) => k);
+    assert.ok(bound.length > 0,
+      `${entry} has a bindPreferences() that this scan read as binding nothing -- the slice or `
+      + 'the call convention changed, and the assertion below would be counting nothing');
+    if (!bound.some((k) => !k.endsWith('-enable-effect'))) empty.push(entry);
+  }
+
+  assert.ok(files > 0, 'no effect files were scanned');
+  assert.deepEqual(unreadable, [],
+    `these effects have no parsable \`static bindPreferences(dialog)\`, so their reset set is `
+    + `unknown: ${unreadable.join(', ')}`);
+  assert.deepEqual(empty, [],
+    `these effects bind nothing but their own enable switch, so their reset button would have an `
+    + `empty set to iterate: ${empty.join(', ')}`);
 });
