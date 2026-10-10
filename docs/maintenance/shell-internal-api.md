@@ -21,12 +21,12 @@ fork 的全部生存能力都压在 GNOME Shell 的私有接口上。`_doEnable(
 | --- | --- |
 | `Main.wm._shouldAnimateActor` | 补丁本体：每一次窗口开合 |
 | `Main.wm._waitForOverviewToHide` | 补丁本体 |
-| `Main.wm._mapWindowDone` | 动画收尾 `:1088`（只调用，不 patch） |
-| `Main.wm._destroyWindowDone` | 动画收尾 `:1090`（只调用，不 patch） |
+| `Main.wm._mapWindowDone` | 动画收尾 `extension.js:1240`（只调用，不 patch） |
+| `Main.wm._destroyWindowDone` | 动画收尾 `extension.js:1242`（只调用，不 patch） |
 | `Workspace.prototype._addWindowClone` | 概览克隆放大 |
 | `Workspace.prototype._windowRemoved` | 关闭路径 |
 | `Workspace.prototype._doRemoveWindow` | 关闭路径 |
-| `Workspace.prototype._lookupIndex` | `_shouldDestroy()` `:1107`（只调用，不 patch） |
+| `Workspace.prototype._lookupIndex` | `_shouldDestroy()`（`extension.js:1259`，只调用，不 patch） |
 | `WindowPreview.prototype._init` | 挂 unmanaged 处理 |
 | `WindowPreview.prototype._deleteAll` | 概览 X 双击防重入 |
 | `WindowPreview.prototype._restack` | 叠序 |

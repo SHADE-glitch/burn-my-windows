@@ -58,6 +58,7 @@ npm test        # test/*.test.mjs
 | `test/shader-warmup.test.mjs` | 着色器预热：只有成功才登记、一个失败不结束队列、失败留日志、跨 profile 去重、禁用后源自退 |
 | `test/repo.test.mjs` | 仓库自身的约定：README 双语对成对、无复选框、`reports/` 既被忽略也没被追踪 |
 | `test/docs-links.test.mjs` | 文档路由：`docs/maintenance/` 三页在、markdown 链接指向的文件在、`§N` 引用不悬空、拆出去的内容真的不在本文件里 |
+| `test/doc-anchors.test.mjs` | 文档里的行号锚点：锚点点名的文件在本仓库存在、点名的行不越界也不是空行、且不允许只写行号不写文件（没有文件名的行号没有任何工具能校验，它烂掉时无人知情）。`CHANGELOG.md` 与 `.js` 注释里的锚点**不在**它范围内，理由见测试文件抬头 |
 
 **为什么需要 build-freshness 这一门**：本仓库把编译产物提交进 git 且没有安装步骤，所以改了
 `.frag` / `.ui` / schema 而忘记 `make`，运行时会**继续用旧产物并且报绿**。没有工具会告诉你这件事。
@@ -308,12 +309,12 @@ GType 是否稳定、disable 后有没有残留、dispose 竞态会不会抛、�
   共用的动画开合时序，属于**推翻上游机制**；而收益只是"全屏时那一帧可能多一次合成"这种观感级差异。
   稳定性 > 性能 > 观感的排序下，这笔交易不划算。**什么情况下翻案**：真有人在实机报告全屏动画被多余
   的合成打断，那时按**症状**动手，而不是按这段分析动手。
-- `src/Shader.js:28` 与 `src/effects/Glide.js:37` 的注释写 `.glsl`，而 `:209` 实际加载 `.frag`。
+- `src/Shader.js:28` 与 `src/effects/Glide.js:37` 的注释写 `.glsl`，而 `src/Shader.js:209` 实际加载 `.frag`。
 - `src/migrate.js` 的已知脆弱都是文本解析（只跑一次，由 `last-extension-version` 把关）：
   `r.includes(...)` 会匹配到 dconf dump 里别的键的字符串值内部；`replace('[/]\n','')` 与
   `replace('flame-','fire-')` 都是字面替换，只处理第一次出现；`^.*-preview-.*` 会删掉任何含
   `-preview-` 的行；重试去重比较的是精确 trim 后文本，格式一变就失效。
-  **撤回一条旧结论**：本节原先写"`:89` 从迁移来的 keyfile 里剥掉 `test-mode=`，所以迁移过的
+  **撤回一条旧结论**：本节原先写"`src/migrate.js:89` 从迁移来的 keyfile 里剥掉 `test-mode=`，所以迁移过的
   profile 永远进不了测试模式"——不成立。`test-mode` 属于**主** schema
   （`schemas/org.gnome.shell.extensions.burn-my-windows.gschema.xml`），只从 `this._settings`
   读（`extension.js:1164`），而迁移根本不写主 schema：生成的 keyfile 里本来就不可能有这个键。

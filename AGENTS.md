@@ -81,7 +81,8 @@ fork of Burn-My-Windows, used in place with no install step.
     over `extension.js`, `prefs.js` and all of `src/` (32 files); `test` runs every
     `test/*.test.mjs`. Gates: build freshness (including that no bundled icon is left
     unnamed), effect registration, sentinel drift, patch symmetry, proxy retry, shader
-    warm-up, repository docs, doc links and `§N` references, and the four preferences-window
+    warm-up, repository docs, doc links and `§N` references, doc line-number anchors, and
+    the four preferences-window
     gates (widget-tree degradation, per-effect reset, row descriptions, attribution).
     Adding a file needs no other edit — the glob and CI both pick it up. Run L0 before
     claiming anything about **any** change.
@@ -108,14 +109,24 @@ fork of Burn-My-Windows, used in place with no install step.
   `test/effect-registry.test.mjs`, `test/build-freshness.test.mjs` and probes 02/05; the
   probe derives its expectation from the GResource bundle, not from `_ALL_EFFECTS`,
   because comparing a list with itself proves nothing.
-- **`file:line` anchors decay in bulk, and nothing checks them.** Adding or removing lines in
-  `extension.js` silently invalidates every citation of the form `extension.js:953` in the probes,
-  in `MAINTENANCE.md` and in `docs/maintenance/` — they keep reading as evidence while pointing at
-  unrelated code. After any change that moves lines, re-walk them mechanically
-  (`grep -rn "extension\.js:[0-9]" --include="*.md" --include="*.js" . | grep -v reports/`, then
-  print each target line) — or write the reference by symbol instead
-  (`_chooseEffect()`'s `if (matches && c.powerProfile != 0)`), which is what probe comments now use.
-  `test/docs-links.test.mjs` proves links and `§N` resolve; it cannot see line numbers drift.
+- **`file:line` anchors decay in bulk — in the docs this is now checked, in `.js` comments it is not.**
+  Adding or removing lines in `extension.js` silently invalidates every citation that names a file and a
+  line number: the sentence around it keeps reading as evidence while pointing at unrelated code.
+  `test/doc-anchors.test.mjs` walks every committed markdown except `CHANGELOG.md` and demands that each
+  anchor name a file that exists here, that the line it names is inside that file and not blank, and that
+  no citation gives a line number without giving the file too -- because a number whose file is never
+  named cannot be checked by anything. It was written after a one-off walk found that failure live: the
+  `extension.js` function table in `docs/maintenance/shell-internal-api.md` gave three bare line numbers
+  for calls that actually sit at `extension.js:1240`, `extension.js:1242` and `extension.js:1259`, and two
+  of the numbers it had been giving landed on a lone brace and on a blank line.
+  What the gate cannot see: an anchor that still lands on a real, non-blank line but no longer holds the
+  claimed symbol (re-take those by hand after any edit that moves lines), and anchors inside `.js`
+  comments -- `extension.js` cites upstream shell files (`workspace.js`, `windowPreview.js`) that are not
+  in this tree at all, so scanning those would need a hand-maintained allowlist of whose file is whose.
+  Keep re-walking the comment anchors mechanically
+  (`grep -rn "extension\.js:[0-9]" --include="*.js" .`, then print each target line) — or write the
+  reference by symbol instead (`_chooseEffect()`'s `if (matches && c.powerProfile != 0)`), which is what
+  probe comments now use and what makes drift impossible to miss.
 - **Gates must be able to fail.** Prove it with mutations: tamper a `.frag`, drop an
   effect from `_ALL_EFFECTS`, add a 9th `this._orig…` capture without updating `PATCHES`,
   or un-guard one install. Prefer a `cp -a` copy; if you mutate the working tree instead,
