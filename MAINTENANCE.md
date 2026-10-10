@@ -340,8 +340,9 @@ GType 是否稳定、disable 后有没有残留、dispose 竞态会不会抛、�
   **另一半仍然没人守**：`<ref>` 那个分支名。默认分支改名 → 菜单项与更新 toast 一起 404 而 L0 全绿。
   不做成门的理由没变：门需要一个"本仓库默认分支叫什么"的可信来源，而 CI 检出里没有
   （`refs/remotes/origin/HEAD` 不是 GitHub Actions 检出的保证产物），为了这一条去加一个提交进仓库的字段
-  等于替决定做掉一半。人工核对是一条命令：`git ls-remote --symref origin HEAD`（`origin` 自 2026-10-10
-  起是 SSH 地址，所以这条在本机可用；当时它指到 `refs/heads/master`）。
+  等于替决定做掉一半。人工核对是一条命令：`git ls-remote --symref origin HEAD` —— 只有 remote 是
+  SSH 形态时它才有结果（这台机器上 https 形态连 `github.com:443` 会**静默挂死**，不报错），
+  2026-10-10 用它读到的是 `ref: refs/heads/master`。
 - 沙箱里 `gjs` GTK4 客户端只证明"能开窗、能关窗、动画被接管"，不证明 GTK 应用在你机器上的其他行为。
 - **文档路由门不区分正文与引文**：它扫每一行 markdown 里的节号引用，所以**举一个坏例子也会被当成一次
   真引用**并让门变红。规避办法是要么在引文里不写节号，要么让引文里的节号紧挨它自己的文件名；
