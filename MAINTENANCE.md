@@ -333,10 +333,15 @@ GType 是否稳定、disable 后有没有残留、dispose 竞态会不会抛、�
   从 README 的 `git clone` 行与 `**Upstream:**` 行取期望地址，所以改写 README 那两行的**形状**
   会让它红在"取不到地址"而不是红在归属上；五个槽位的**数量**也被同一扇门钉住——多一个说明清扫越界
   改到了仍属上游的文档，少一个说明漏改。详见 CHANGELOG 的 D-051 / D-052 / D-056。
-- **`changelog` 那个 URL 里的分支名不在门的覆盖范围内**：断言是 `startsWith(forkUrl())`，只比 host
-  与仓库名，`/blob/master/CHANGELOG.md` 的 `master` 靠人肉核对（当时 `git ls-remote --symref origin HEAD`
-  指到 `refs/heads/master`）。默认分支若改名，菜单项与更新 toast 会一起打到 404，而 L0 全绿。
-  没有把它做成门：门要读分支名，而仓库里没有任何已提交产物记录它——加一个字段等于替这个决定先做掉一半。
+- **`changelog` 那个 URL 只守住了"路径落在我们发货的文件上"这一半**：`test/prefs-attribution.test.mjs`
+  的第 5 条现在会把 `/blob/<ref>/<path>` 拆开，要求 `<path>` 在**本仓库里真读得到**、非空、且带
+  `# CHANGELOG` 标题（三种注入各命中一次：把路径改成 `docs/changelog.md` / 把整条 URL 换成仓库根 /
+  把 `CHANGELOG.md` 改名——都在同一条断言上红，消息直接写出"that page would 404"）。
+  **另一半仍然没人守**：`<ref>` 那个分支名。默认分支改名 → 菜单项与更新 toast 一起 404 而 L0 全绿。
+  不做成门的理由没变：门需要一个"本仓库默认分支叫什么"的可信来源，而 CI 检出里没有
+  （`refs/remotes/origin/HEAD` 不是 GitHub Actions 检出的保证产物），为了这一条去加一个提交进仓库的字段
+  等于替决定做掉一半。人工核对是一条命令：`git ls-remote --symref origin HEAD`（`origin` 自 2026-10-10
+  起是 SSH 地址，所以这条在本机可用；当时它指到 `refs/heads/master`）。
 - 沙箱里 `gjs` GTK4 客户端只证明"能开窗、能关窗、动画被接管"，不证明 GTK 应用在你机器上的其他行为。
 - **文档路由门不区分正文与引文**：它扫每一行 markdown 里的节号引用，所以**举一个坏例子也会被当成一次
   真引用**并让门变红。规避办法是要么在引文里不写节号，要么让引文里的节号紧挨它自己的文件名；
