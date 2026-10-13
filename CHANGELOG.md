@@ -469,3 +469,31 @@ Change   Added the seven missing entries under a labeled block citing `STANDARD.
 Evidence L0: `git check-ignore -v .venv/x __pycache__/x.py foo.db .pytest_cache/x` now names `.gitignore` for all four paths (before the change none resolved); `npm test` 94/94; `npm run check:log` PASS
 Cost     The block is a rule, not a check — only `reports/` is pinned by `test/repo.test.mjs`, so the full list can still drift. No `.venv` or `*.db` is produced by this extension's tooling, so the entries are prophylactic
 Commit   bff0f2c
+
+### D-065 · 2026-10-13 · guard · v48
+Symptom  `CONVENTIONS.md` (machine-wide) asks a dimension-A repository's `AGENTS.md` to name its
+         dimension. This one pointed at `STANDARD.md` for the rules and never said which dimension
+         they were, so a reader could not tell A was a floor rather than a shared list. Nothing
+         asserted the finalized root-file layer either: `LICENSE`, the manifest, the `MAINTENANCE`
+         pair, `docs/` and `.github/workflows/` could each be deleted and the whole suite would
+         stay green
+Change   `AGENTS.md` gains one blockquote naming dimension A and pointing at `CONVENTIONS.md` (the
+         "Shared standard" block below it untouched, no rule text restated). New
+         `test/conventions.test.mjs`, four cases: the root-file layer present at the root, exactly
+         one manifest and it is `package.json`, no `AGENTS.zh-CN.md` (dimension B's shape), the
+         dimension pointer present with none of the standard's own section headings reproduced, and
+         `STANDARD.md`'s runtime ignore list in `.gitignore` with no tracked runtime file and
+         nothing tracked under `reports/` or `docs/reports/`. Failures name the file and where it
+         goes
+Evidence L0: `npm test` **99/99** (4 from the new file); `npm run check:log` PASS. Negative run:
+         `LICENSE` moved out of the tree with `git mv`, then the suite — red with `- LICENSE: create
+         this file at the repository root`; moved back, `git status --porcelain LICENSE` empty. The
+         entry above names `STANDARD.md`'s clause without a section number on purpose: `git mv`
+         aside, `test/docs-links.test.mjs` refuses any `§N` whose file is not in this repository,
+         and the machine-wide standard lives in a private repository this CI cannot see
+Cost     The `node --test test/*.test.mjs` glob picks the file up, so no CI change; under a
+         glob-less chain the file would have been dead weight. Reads the working tree, so an
+         uncommitted file passes. Presence only, not content. No network and no read of
+         agent-standards — a private repository this CI cannot see, so its rules are restated as
+         assertions here
+Commit   05911fc
