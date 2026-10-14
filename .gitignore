@@ -9,7 +9,7 @@
 # this; the rule only keeps one out of `git status` if it ever appears.
 node_modules/
 
-# Machine-wide runtime ignore list (agent-standards/STANDARD.md §7): Python
+# Machine-wide runtime ignore list (~/.agents/standards/STANDARD.md §4): Python
 # tooling and stray databases can land beside the extension during testing.
 # Keep them out of `git status`; never commit them.
 .venv/
