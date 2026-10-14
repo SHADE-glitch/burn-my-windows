@@ -3,20 +3,12 @@
 Guidance for agents working inside `burn-my-windows@local` — a local maintenance
 fork of Burn-My-Windows, used in place with no install step.
 
-> **Dimension.** This repository is dimension **A — open source, strict** in the machine-wide
-> `CONVENTIONS.md` (outside this repository); the shared rules live in `STANDARD.md` and the
-> dimension-A detail in `~/.agents/standards/dimensions/a.md`.
->
-> **Shared standard.** Root file names, the process-draft location (`docs/reports/`), the
-> `CHANGELOG` entry format and the runtime ignore list are defined once in the machine-wide
-> `STANDARD.md` (outside this repository); the dimension-A rules — the language policy, CI
-> version pinning and entry commands, and the test entry command — live in
-> `~/.agents/standards/dimensions/a.md`. Neither is restated here.
->
-> **Push over SSH, never HTTPS.** Verify `git remote get-url --push origin` starts with `git@`
-> before pushing; if it starts with `https://`, fix it first — never push over HTTPS.
+> **Dimension.** A — open source (strict), per `CONVENTIONS.md` (the dimensions entry page); the
+> shared rules live once in `~/.agents/standards/STANDARD.md` — root files, process drafts, the
+> changelog entry format, runtime ignores, remotes/pushing, profile listing — and the dimension-A
+> detail in `~/.agents/standards/dimensions/a.md`. Neither is restated here.
 
-## Critical Rules
+## Hard rules
 - **Do not load ESModules via legacy `imports`** (e.g. `imports.ui.main` throws
   `SyntaxError` in GNOME 45+). Use static `import` or dynamic `await import()`.
 - **Do not reassign ESModule exports directly** (e.g. `Main.notify = ...`).
@@ -204,7 +196,7 @@ fork of Burn-My-Windows, used in place with no install step.
 - If what CI runs changes, update this section too. CI is a signal, not a gate, until branch protection
   is enabled — read the result after every push.
 
-## Docs & Commits
+## Docs & commits
 - `MAINTENANCE.md` is a **router**. The three long-term assets live under `docs/maintenance/`:
   `docs/maintenance/shell-internal-api.md` (§5/§7/§10), `docs/maintenance/compat-matrix.md` (§6) and
   `docs/maintenance/measurement.md` (§8/§12, plus the probe 06/07 methodology split out of
@@ -228,14 +220,12 @@ fork of Burn-My-Windows, used in place with no install step.
   at a phase boundary; do not carry an unconfirmed phase into the next one.
 
 ## Recording conventions
-- Behaviour changes land in `CHANGELOG.md` as `D-###` entries; ids are monotonic and **never
-  reused**, so a gap means an entry was deleted — `check:log` fails on that rather than calling it
-  cleanup. A window with zero entries is also a failure: a check over an empty set proves nothing.
-- `kind` ∈ `fix` | `perf` | `taste` | `guard` | `revert` | `chore`, cut by **who may demand a
-  revert**: bug → `fix`; measurable degradation, not correctness → `perf`; only my taste → `taste`
-  (zero obligation, discardable wholesale on an upgrade); no behaviour change, detects drift →
-  `guard`; withdraws earlier work → `revert`; cleanup with no obligation either way → `chore`.
-  A commit that is two things becomes two entries citing one hash — done so for `f4cba97`
+
+Common CHANGELOG rules: the changelog-format section of `~/.agents/standards/STANDARD.md`.
+
+- Behaviour changes land in `CHANGELOG.md` as `D-###` entries; `check:log` fails on a gap rather
+  than calling it cleanup.
+- A commit that is two things becomes two entries citing one hash — done so for `f4cba97`
   (D-010 guard / D-011 perf / D-012 perf) and `038c903` (D-019 fix / D-020 guard).
 - `guard` is not a synonym for `fix` here: the sentinel list
   (`docs/maintenance/shell-internal-api.md` §5) and the compatibility matrix
@@ -246,8 +236,7 @@ fork of Burn-My-Windows, used in place with no install step.
   `docs/maintenance/measurement.md` §12 baseline commands
   print them. Measured µs/ms figures inside entries are *that day's* measurements.
 - Known-but-not-fixed issues stay in `MAINTENANCE.md` §13; they have no commit, so no entry.
-- `Symptom` names the mechanism, never the session: no window titles, no application names from a
-  real desktop, no screen-recording content.
+- No window titles, no application names from a real desktop, no screen-recording content.
 - Run `npm run check:log` before committing docs; bare `node scripts/check-log.mjs` also works.
 
 ## Release / version
@@ -263,17 +252,9 @@ fork of Burn-My-Windows, used in place with no install step.
 
 ## Listed on the GitHub profile
 
-This repo is listed on the owner's profile front page (`SHADE-glitch/SHADE-glitch`). That page lives
-in a **separate repository and never updates itself** — when a fact it states about this repo
-changes, update the profile README in the same round. The profile's own `AGENTS.md` is the
-authoritative rulebook; its guard `scripts/check-profile.mjs` must keep passing.
+See the profile-listing section of `~/.agents/standards/STANDARD.md`. This repo's own additions:
 
-- **Rename / transfer / delete** — the profile link dies; fix the row.
 - **Purpose drift / upstream identity** — the profile's one-line description and its "a fork of Burn
   My Windows" wording must still be true.
-- **LICENSE change** — the profile's license badge must equal this repo's `LICENSE`.
 - **GNOME target change** — the `GNOME Shell` badge must equal `metadata.json`'s `shell-version`
   (the profile currently says `45–50`).
-- **Freeze / archive / upstream-frozen** — say so on the profile; never leave a stale "maintained".
-- **Public ↔ private** — a repo that goes private must be **delisted** (only the two whitelisted
-  private apps may stay, and they are not this one).
