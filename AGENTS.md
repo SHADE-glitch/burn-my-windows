@@ -207,11 +207,11 @@ fork of Burn-My-Windows, used in place with no install step.
   English subject with an English conventional-commit prefix — `feat:` / `fix:` / `perf:` / `guard:` /
   `test:` / `docs:` / `chore:`, optionally scoped (`fix(test):`). The list is what the history actually uses;
   a new prefix means updating this line, not inventing a near-synonym.
-- Phase evidence (`PROFILE` / `AUDIT` / `PLAN` / `VERIFY` / `STATE`) lives in `docs/reports/`,
-  which is **gitignored and local-only**: the point is that raw journal lines, window
-  titles and resolved user paths can be written down without ever reaching the public
-  remote. `test/repo.test.mjs` guards both directions (the ignore rule exists, and nothing
-  under `reports/` is tracked). Start a new session by reading `docs/reports/STATE.md`.
+- Phase evidence lives in `docs/reports/`, which is **gitignored and local-only** (the
+  process-draft section of `~/.agents/standards/STANDARD.md`): the point is that raw journal
+  lines, window titles and resolved user paths can be written down without ever reaching the
+  public remote. `test/repo.test.mjs` guards both directions (the ignore rule exists, and
+  nothing under `reports/` is tracked). Start a new session by reading `docs/reports/STATE.md`.
 - Nothing committed may depend on `reports/` contents: it is not in a clone, so a
   committed sentence citing it would be unverifiable for everyone else. Aggregate numbers
   in committed docs still come from commands, per § Recording conventions.
