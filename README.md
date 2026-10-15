@@ -9,6 +9,14 @@ Disintegrate your windows with style.
 ![Based on: Burn My Windows](https://img.shields.io/badge/based%20on-Burn%20My%20Windows-orange)
 [![Repository](https://img.shields.io/badge/repository-GitHub-black?logo=github)](https://github.com/SHADE-glitch/burn-my-windows)
 
+**What it is** — A maintenance fork of Burn My Windows: 26 shader-based window open/close animations for GNOME Shell, with profile-based configuration and libadwaita preferences.
+
+**What it solves** — It keeps the upstream feature set intact while fixing the latent stability, resource-management and startup-performance issues that degrade a long-running session.
+
+**How to run** — Clone into `~/.local/share/gnome-shell/extensions/burn-my-windows@local`, run `make` to rebuild the GResource bundle and `gschemas.compiled`, then `gnome-extensions enable burn-my-windows@local` (log out and back in on Wayland).
+
+**Where to look** — See [AGENTS.md](AGENTS.md) and [MAINTENANCE.md](MAINTENANCE.md).
+
 ## 📖 About
 
 This repository is a **personal maintenance fork** of [**Burn My Windows**](https://github.com/Schneegans/Burn-My-Windows) by **Simon Schneegans**, frozen at upstream **v48** and maintained locally under the UUID `burn-my-windows@local`.

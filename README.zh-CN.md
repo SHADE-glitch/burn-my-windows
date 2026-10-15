@@ -9,6 +9,14 @@
 ![Based on: Burn My Windows](https://img.shields.io/badge/based%20on-Burn%20My%20Windows-orange)
 [![Repository](https://img.shields.io/badge/repository-GitHub-black?logo=github)](https://github.com/SHADE-glitch/burn-my-windows)
 
+**是什么** — Burn My Windows 的维护分支：26 种基于着色器的窗口打开/关闭动画，支持配置档与 libadwaita 偏好设置。
+
+**解决什么** — 完整保留上游功能，同时修复那些难以复现、却会在长时间运行的会话中逐渐劣化的稳定性、资源管理与启动性能问题。
+
+**怎么跑** — 克隆到 `~/.local/share/gnome-shell/extensions/burn-my-windows@local`，运行 `make` 重建 GResource 包与 `gschemas.compiled`，再 `gnome-extensions enable burn-my-windows@local`（Wayland 下需注销重登）。
+
+**去哪看** — 见 [AGENTS.md](AGENTS.md) 与 [MAINTENANCE.md](MAINTENANCE.md)。
+
 ## 📖 项目说明
 
 本仓库是 **Simon Schneegans** 的 [**Burn My Windows**](https://github.com/Schneegans/Burn-My-Windows) 的**个人维护分支**，冻结在上游 **v48** 版本，以 `burn-my-windows@local` 为 UUID 在本地维护。
