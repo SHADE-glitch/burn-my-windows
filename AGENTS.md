@@ -7,6 +7,11 @@ fork of Burn-My-Windows, used in place with no install step.
 > shared rules live once in `~/.agents/standards/STANDARD.md` — root files, process drafts, the
 > changelog entry format, runtime ignores, remotes/pushing, profile listing — and the dimension-A
 > detail in `~/.agents/standards/dimensions/a.md`. Neither is restated here.
+>
+> **Read these before the first edit** (bare `@` imports — CodeBuddy expands them; opencode reads
+> the same two from `opencode.json`):
+> @~/.agents/standards/STANDARD.md
+> @~/.agents/standards/dimensions/a.md
 
 ## Hard rules
 - **Do not load ESModules via legacy `imports`** (e.g. `imports.ui.main` throws
