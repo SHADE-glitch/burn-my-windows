@@ -14,6 +14,13 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   static:
     name: L0 static gates
@@ -22,10 +29,10 @@ jobs:
       # Full history: check:log resolves the coverage anchor (16ab10a) and walks
       # `anchor..HEAD`. A default shallow (depth 1) checkout cannot see the anchor
       # and the gate fails for the wrong reason.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
       - run: npm test
