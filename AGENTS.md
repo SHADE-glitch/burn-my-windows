@@ -179,7 +179,7 @@ fork of Burn-My-Windows, used in place with no install step.
 - `.github/workflows/ci.yml` runs the **L0 gates only** on every push and pull request:
   `npm test`, `npm run check`, `npm run check:log`, on Node 20 / `ubuntu-latest`.
   **They must stay green.** A red CI run is the same signal as a red local run, because
-  the workflow runs exactly the three commands a maintainer runs by hand.
+  the workflow runs the three gate commands a maintainer runs by hand, plus a non-gating `npm run test:coverage` read.
 - The **L1 headless layer is deliberately not run in CI** — it needs a real GNOME Shell
   process (§ Tests, MAINTENANCE.md §1), which a hosted runner does not provide. Never
   "fix" a red CI by adding a step that needs a display.
