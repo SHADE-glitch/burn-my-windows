@@ -509,3 +509,12 @@ Evidence 2026-10-16: CodeBuddy CLI with every tool disabled printed the tokens t
          opencode `run` printed the token its `instructions` named, with no tool call.
 Cost     Both hooks name `~/.agents`, absent in another clone, so they are skipped there.
 Commit   2ed3034
+
+### D-067 · 2026-10-19 · chore
+
+Symptom  AGENTS.md said the workflow "runs exactly the three commands a maintainer runs by hand",
+         but ci.yml has a fourth npm run test:coverage step.
+Change   The sentence now names three gates plus the non-gating coverage read.
+Evidence 2026-10-19: .github/workflows/ci.yml has four run: steps.
+Cost     None; wording only.
+Commit   104aad6
