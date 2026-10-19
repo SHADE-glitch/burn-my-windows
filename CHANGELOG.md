@@ -518,3 +518,18 @@ Change   The sentence now names three gates plus the non-gating coverage read.
 Evidence 2026-10-19: .github/workflows/ci.yml has four run: steps.
 Cost     None; wording only.
 Commit   104aad6
+
+### D-068 · 2026-10-19 · fix
+
+Symptom  The `Application` row of the shortcuts table described its value as "free text,
+         `|`-separated" — a literal pipe inside a code span. GFM still reads that pipe as a cell
+         separator, so the row rendered with five cells instead of four. README.zh-CN.md had the
+         same defect ("用 `|` 分隔").
+Change   The pipe is escaped in both files (`\|`), which renders as a literal pipe inside the
+         code span. The wording and the row's other cells are unchanged.
+Evidence 2026-10-19: every table block in README.md and README.zh-CN.md has a uniform pipe count;
+         `npm test` — 99 passed; `npm run check` and `npm run check:log` — PASS.
+Cost     None; no test or CI file was touched.
+
+Commit   857a5d3
+
