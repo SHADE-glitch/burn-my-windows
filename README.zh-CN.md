@@ -91,7 +91,7 @@ rm -rf ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 
 | 下拉项 | 取值 | 比对对象 |
 |---|---|---|
-| Application | 自由文本，用 `|` 分隔 | 窗口的 `WM_CLASS`，统一转小写后按**整串相等**比较：`fire` 匹配不到 `firefox`。旁边的拾取按钮可以替你填好 |
+| Application | 自由文本，用 `\|` 分隔 | 窗口的 `WM_CLASS`，统一转小写后按**整串相等**比较：`fire` 匹配不到 `firefox`。旁边的拾取按钮可以替你填好 |
 | Animation Type（动画类型） | 任意 / 打开窗口 / 关闭窗口 | 这个窗口正在 map 还是 unmap |
 | Window Type（窗口类型） | 任意 / 普通窗口 / 对话框窗口 | normal 与 dialog / modal-dialog |
 | Color Scheme（配色方案） | 任意 / 默认配色 / 深色配色 | GNOME 的 `color-scheme`，即 `default` 与 `prefer-dark`；每次动画各读一次，所以跟随系统主题可用 |

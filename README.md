@@ -93,7 +93,7 @@ GNOME way. Only normal windows and dialogs get effects — panels, docks and the
 
 | Dropdown | Values | Matched against |
 |---|---|---|
-| Application | free text, `|`-separated | the window's `WM_CLASS`, lower-cased, compared as a **whole string**: `fire` does not match `firefox`. The pick button fills it in for you |
+| Application | free text, `\|`-separated | the window's `WM_CLASS`, lower-cased, compared as a **whole string**: `fire` does not match `firefox`. The pick button fills it in for you |
 | Animation Type | Any / Opening Windows / Closing Windows | whether this window is mapping or unmapping |
 | Window Type | Any / Normal Windows / Dialog Windows | normal vs dialog / modal-dialog |
 | Color Scheme | Any / Default Color Scheme / Dark Color Scheme | GNOME's `color-scheme`, i.e. `default` vs `prefer-dark`; read per animation, so following the system theme works |
