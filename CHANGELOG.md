@@ -533,3 +533,18 @@ Cost     None; no test or CI file was touched.
 
 Commit   857a5d3
 
+### D-069 · 2026-10-27 · fix
+
+Symptom  The v26 migration rewrote the legacy `flame-` and `claw-` effect prefixes with
+         `String.prototype.replace`, which stops after the first match. A profile that had
+         customised both `flame-movement-speed` and `flame-scale` came through with the second
+         key still spelled `flame-*`, so the Fire effect read `fire-scale` as unset and used
+         its default instead of the user's value.
+Change   Both rewrites use `replaceAll`. The two prefixes cannot overlap, so the order of the
+         calls does not matter.
+Evidence L0: `npm run check` (syntax) and `npm test` (99 pass) on 2026-10-27; `npm run check:log`
+         resolves the cited SHA. The migration itself was not exercised against a real v26
+         profile — no such profile exists on this machine.
+Cost     None; `replaceAll` is available in the GJS version this fork targets.
+Commit   0096df3
+
