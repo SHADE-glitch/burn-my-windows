@@ -97,8 +97,11 @@ export async function fromVersion26(metadata) {
       r = r.trim();
 
       // There were some inconsistencies in the key names. The update fixes them.
-      r = r.replace('flame-', 'fire-');
-      r = r.replace('claw-', 'trex-');
+      // replaceAll, not replace: a string pattern replaces only the first match, so a
+      // profile that customised both flame-movement-speed and flame-scale came through
+      // with the second key still named flame-*, and the new Fire effect ignored it.
+      r = r.replaceAll('flame-', 'fire-');
+      r = r.replaceAll('claw-', 'trex-');
 
       // Find all effects which were used for openeing and closing. This first extracts
       // all lines which end in "-open-effect=true" and then remove this suffix from the
