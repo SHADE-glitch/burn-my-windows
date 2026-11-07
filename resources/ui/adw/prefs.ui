@@ -196,6 +196,32 @@ SPDX-License-Identifier: GPL-3.0-or-later
             </child>
 
             <child>
+              <object class="AdwPreferencesGroup">
+                <property name="title" translatable="yes">Defaults</property>
+                <property name="description" translatable="yes">Restore the effect settings of this profile to the values this fork ships. The profile's constraints are kept.</property>
+
+                <child>
+                  <object class="AdwActionRow">
+                    <property name="title" translatable="yes">Restore default settings</property>
+                    <property name="subtitle" translatable="yes">Resets every effect and its options. Application, window-type and priority constraints are kept.</property>
+                    <property name="activatable-widget">profile-restore-defaults</property>
+                    <child>
+                      <object class="GtkButton" id="profile-restore-defaults">
+                        <property name="label" translatable="yes">Restore Defaults</property>
+                        <property name="valign">center</property>
+                        <property name="action-name">prefs.profile-restore-defaults</property>
+                        <style>
+                          <class name="destructive-action" />
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+
+              </object>
+            </child>
+
+            <child>
               <object class="GtkButton">
                 <property name="action-name">prefs.profile-delete</property>
                 <property name="child">

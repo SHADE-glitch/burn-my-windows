@@ -219,7 +219,7 @@ SPDX-License-Identifier: CC0-1.0
     <!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -->
 
     <key name="fire-enable-effect" type="b">
-      <default>true</default>
+      <default>false</default>
       <summary>Fire Enable Effect</summary>
       <description>Use the fire effect.</description>
     </key>
@@ -313,7 +313,7 @@ SPDX-License-Identifier: CC0-1.0
     </key>
 
     <key name="glide-tilt" type="d">
-      <default>-0.3</default>
+      <default>-0.2</default>
       <summary>Glide Tilt</summary>
       <description>The amount of tilting.</description>
     </key>
@@ -397,7 +397,7 @@ SPDX-License-Identifier: CC0-1.0
     <!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -->
 
     <key name="paint-brush-enable-effect" type="b">
-      <default>false</default>
+      <default>true</default>
       <summary>Paint Brush Enable Effect</summary>
       <description>Use the paint-brush effect.</description>
     </key>

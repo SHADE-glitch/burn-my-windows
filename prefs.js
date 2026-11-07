@@ -556,6 +556,35 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
           deleteProfileDialog.show();
         });
         group.add_action(deleteProfileAction);
+
+        // This action restores the effect settings of the currently active profile to the
+        // values this fork ships. The profile's constraints — application, window type,
+        // colour scheme, power mode and priority — are not effect settings and are kept.
+        const restoreDefaultsDialog = this._createMessageDialog(
+          _('Restore default settings?'),
+          _('Every effect and its options in this profile return to the values this fork ships. The profile’s application, window-type and priority constraints are kept. This cannot be undone.'),
+          window, [
+            {
+              label: _('Cancel'),
+              destructive: false,
+              default: true,
+            },
+            {
+              label: _('Restore Defaults'),
+              destructive: true,
+              default: false,
+              action: () => {
+                this._restoreProfileDefaults();
+              }
+            }
+          ]);
+
+        const restoreDefaultsAction =
+          Gio.SimpleAction.new('profile-restore-defaults', null);
+        restoreDefaultsAction.connect('activate', () => {
+          restoreDefaultsDialog.show();
+        });
+        group.add_action(restoreDefaultsAction);
       }
     });
 
@@ -601,6 +630,18 @@ GitHub: <a href='https://github.com/sponsors/schneegans'>https://github.com/spon
   // Returns a Gio.Settings object for the current effect profile.
   getProfileSettings() {
     return this._activeProfile.settings;
+  }
+
+  // Resets every effect key of the active profile. Keys starting with 'profile-' are the
+  // profile's own constraints, not effect settings, so they are left alone. Every widget
+  // in the dialog is bound to this settings object and refreshes itself on the change.
+  _restoreProfileDefaults() {
+    const settings = this.getProfileSettings();
+    for (const key of settings.list_keys()) {
+      if (!key.startsWith('profile-')) {
+        settings.reset(key);
+      }
+    }
   }
 
   // Connects an Adw.ComboRow (or anything else which has an 'selected' property) to a

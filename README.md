@@ -17,7 +17,7 @@ Disintegrate your windows with style.
 
 **Where to look** — See [AGENTS.md](AGENTS.md) and [MAINTENANCE.md](MAINTENANCE.md).
 
-<p align="center"><img src="docs/screenshots/overview.png" alt="The Fire effect burning a window away as it closes" width="900"></p>
+<p align="center"><img src="docs/screenshots/overview.png" alt="The Paint Brush effect erasing a window as it closes" width="900"></p>
 
 ## 📖 About
 
@@ -33,7 +33,9 @@ It is **not** affiliated with or endorsed by the upstream author. The fork keeps
 - **34 translations**, including Simplified and Traditional Chinese.
 - **UPower / PowerProfiles integration** via D-Bus for power-aware profiles.
 
-<p align="center"><img src="docs/screenshots/demo.gif" alt="A window closing with the Fire effect" width="900"></p>
+<p align="center"><img src="docs/screenshots/demo.gif" alt="A window closing with the paint-brush effect" width="900"></p>
+
+<p align="center"><em><b>In the clip:</b> a text window is closed and the paint-brush effect sweeps across it, tearing it away in brush strokes. <b>What it shows:</b> the effect enabled in the active profile — the one this fork ships as its default — playing on window close.</em></p>
 
 ## 🧰 Prerequisites
 
@@ -74,6 +76,10 @@ Open **GNOME Settings → Extensions → Burn My Windows → Settings**. Pick an
 - **Global:** active profile, preview effect, test mode.
 - **Per effect:** enable toggle, animation time and effect-specific parameters (colors, scale, speed, …).
 - **Profiles:** matching rules on app, animation type, window type, color scheme, power mode and power profile.
+
+The defaults are **this fork's own**: **Paint Brush** is the effect a fresh profile enables, Fire is
+off. The profile editor ends with **Restore Defaults**, which puts every effect setting back to those
+values and keeps the profile's constraints (application, window type, priority).
 
 The dialog writes two places. Global keys go to dconf under
 `/org/gnome/shell/extensions/burn-my-windows/`; **each profile is its own keyfile**,
@@ -133,7 +139,7 @@ a reload cannot have picked up your edit.
 
 **Nothing animates.** Work through these in order:
 
-1. Is at least one effect enabled in **some** profile? A fresh profile enables only `fire`.
+1. Is at least one effect enabled in **some** profile? A fresh profile enables only `paint-brush`.
 2. Does that profile match this window? Constraints are all-AND, and the window has to be a normal
    window or a dialog — see **⚙️ Preferences** above.
 3. Is an application constraint set? It compares whole `WM_CLASS` strings, so a partial name never
@@ -220,6 +226,7 @@ half; this section and CHANGELOG.md do not copy each other.
 - **Power handling:** tolerate UPower being unavailable instead of throwing; a constrained power profile no longer matches when the daemon is absent — the proxy is now rejected when nobody owns the bus name, which is what makes that rule actually hold.
 - **GNOME 50 compatibility:** the private-API sentinel now also covers the symbols that are only used at runtime (`_mapWindowDone`, `_destroyWindowDone`, `_lookupIndex`, the `overlayEnabled`/`window_container` accessors, and the `WindowPreview`/`Workspace` instance fields), using the only predicates that do not raise false warnings on a working shell; comments corrected where they no longer described GNOME 50 (`Meta.disable_unredirect_for_display` no longer exists, the effects are not built lazily, and the pre-warm does not compile GLSL — verified, `get_pipeline()` is still `null` afterwards).
 - **Preferences:** colour buttons are set through `set_rgba()` instead of the deprecated `rgba` property, which removes the warning that was logged for all 29 of them on every dialog open; the widget-tree surgery that decorates the dialog now degrades with a logged warning instead of throwing while the dialog is still being built; each effect row resets its own options in one click; option rows fill in the description the setting itself already declares, read at runtime, which adds no new string to translate; and the menu's homepage / bug links, the About dialog's website / issue links and the changelog entry — the one the "what changed" toast opens after an update — point at this repository while the author credit, the licence and the donation and translation links stay upstream.
+- **Defaults:** the profile schema ships Paint Brush as the one enabled effect instead of upstream's Fire, and the profile editor gained a confirmed **Restore Defaults** action that resets every effect setting while keeping the profile's constraints.
 - **Migration:** async migration callback guarded against post-disable execution; profiles are no longer duplicated on a retried migration.
 - **Build:** restored the shader / UI / asset sources that had been lost and only existed inside the compiled bundle (74 of them at the time), and added a `Makefile` so the committed bundle and schemas can never sit behind their sources.
 - **Cleanup:** removed dead code (`getUIDir()`, `Shader._time`, commented `mushroom-8bit-enable` key) and four icons that nothing named, behind a standing check so the resource manifest cannot grow another one.

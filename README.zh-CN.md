@@ -17,7 +17,7 @@
 
 **去哪看** — 见 [AGENTS.md](AGENTS.md) 与 [MAINTENANCE.md](MAINTENANCE.md)。
 
-<p align="center"><img src="docs/screenshots/overview.png" alt="Fire 效果把窗口烧掉的瞬间" width="900"></p>
+<p align="center"><img src="docs/screenshots/overview.png" alt="Paint Brush 效果把窗口刷掉的瞬间" width="900"></p>
 
 ## 📖 项目说明
 
@@ -33,7 +33,9 @@
 - **34 种语言翻译**，包含简体与繁体中文。
 - **UPower / PowerProfiles 集成**（通过 D-Bus），支持感知电源状态的配置档。
 
-<p align="center"><img src="docs/screenshots/demo.gif" alt="用 Fire 效果关闭一个窗口" width="900"></p>
+<p align="center"><img src="docs/screenshots/demo.gif" alt="用画笔效果关闭一个窗口" width="900"></p>
+
+<p align="center"><em><b>动图内容：</b>关闭一个文本窗口，画笔效果横扫整个窗口，用笔触把它撕走。<b>展示的功能：</b>当前配置里启用的效果——也就是这个 fork 默认的效果——在窗口关闭时播放。</em></p>
 
 ## 🧰 前置依赖
 
@@ -74,6 +76,10 @@ rm -rf ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 - **全局：** 当前配置档、预览特效、测试模式。
 - **单特效：** 启用开关、动画时长及特效专属参数（颜色、缩放、速度等）。
 - **配置档：** 按应用、动画类型、窗口类型、配色方案、电源模式与电源配置档匹配。
+
+默认值就是**本 fork 自己的选择**：新建配置档默认启用 **Paint Brush**，Fire 关闭。配置档编辑区
+末尾有 **Restore Defaults**，把每个特效设置恢复成这些值，同时保留配置档自己的约束
+（应用、窗口类型、优先级）。
 
 偏好对话框写两个地方。全局键落在 dconf 的 `/org/gnome/shell/extensions/burn-my-windows/`；
 **每个配置档是一个独立的 keyfile**——`~/.config/burn-my-windows/profiles/<微秒时间戳>.conf`，
@@ -125,7 +131,7 @@ Wayland 上必须**注销并重新登录**。`scripts/reload.sh` 会重新编译
 
 **动画完全不播。** 按顺序检查：
 
-1. **有没有**某个配置档至少启用了一个特效？新建的配置档只默认启用 `fire`。
+1. **有没有**某个配置档至少启用了一个特效？新建的配置档只默认启用 `paint-brush`。
 2. 那个配置档命中这个窗口了吗？约束是全 AND，而且窗口必须是普通窗口或对话框——见上面
    **⚙️ 偏好设置**。
 3. 是不是设了应用约束？它比较的是完整的 `WM_CLASS` 串，写半截永远匹配不上。别手打，用拾取按钮。
@@ -203,6 +209,7 @@ profile 目录与工作树与开跑前不是逐字节一致，它就拒绝报绿
 - **电源处理：** UPower 不可用时容忍而非抛异常；守护进程缺失时受限电源配置档不再匹配——现在会在无人认领总线名时拒绝该代理，这条规则才真正成立。
 - **GNOME 50 兼容性：** 私有 API 哨兵现已覆盖仅在运行期使用的符号（`_mapWindowDone`、`_destroyWindowDone`、`_lookupIndex`、`overlayEnabled`/`window_container` 访问器，以及 `WindowPreview`/`Workspace` 的实例字段），且采用的谓词不会在正常 shell 上误报；纠正了若干已不再符合 GNOME 50 的注释（`Meta.disable_unredirect_for_display` 已不存在、特效并非延迟构造、预热**不**编译 GLSL——已验证，构造后 `get_pipeline()` 仍为 `null`）。
 - **偏好设置：** 颜色按钮改用 `set_rgba()` 而非已弃用的 `rgba` 属性，消除了每次打开对话框时为全部 29 个颜色按钮各打印一条的弃用告警；给对话框做装饰的那段控件树手术遇到缺失控件改为记一条 warn 后降级，不再在对话框还没建完时抛异常；每个特效行一键重置它自己的选项；选项行的说明句直接取该设置项本来就声明好的文本、运行时读出，不新增任何需要翻译的串；菜单的首页 / 反馈链接、About 的网站 / 问题链接，以及「View Changelog」那一项（版本更新后弹出的 toast 打开的就是它）都指回本仓库，而作者署名、许可证、捐赠与翻译队列的链接仍归上游。
+- **默认值：** profile schema 默认启用的特效从上游的 Fire 改为 Paint Brush；配置档编辑区新增带确认的 **Restore Defaults**，重置全部特效设置而保留配置档约束。
 - **迁移：** 异步迁移回调增加禁用后守卫；重试迁移时不再重复生成配置档。
 - **构建：** 从编译后的资源包里恢复出当初只剩在包里的那批着色器 / UI / 资源源文件（那时是 74 个），并新增 `Makefile`，让提交进仓库的 bundle 与 schema 不可能落后于它们的源文件。
 - **清理：** 移除死代码（`getUIDir()`、`Shader._time`、注释掉的 `mushroom-8bit-enable` 键），并删掉 4 个没有任何 shipped 文本指名的图标——资源清单里再多一个这种条目，常设检查就会红。

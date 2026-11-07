@@ -137,8 +137,8 @@ test('the compiled schemas match their XML', () => {
   }
 });
 
-// Defaults matter as much as key names: `fire-enable-effect` being the single `true`
-// default is what decides which effect a fresh profile plays.
+// Defaults matter as much as key names: `paint-brush-enable-effect` being the single
+// `true` default is what decides which effect a fresh profile plays.
 test('the main schema defaults survive compilation', () => {
   const fromXml = xmlDefaults(MAIN_SCHEMA_FILE);
   const compiled = Object.fromEntries(
@@ -182,6 +182,6 @@ test('every effect has its enable switch in the compiled profile schema', () => 
   const onByDefault = compiledDefaults(PROFILE_SCHEMA)
     .filter(({key, value}) => key.endsWith('-enable-effect') && value === 'true')
     .map(({key}) => key).sort();
-  assert.deepEqual(onByDefault, ['fire-enable-effect'],
+  assert.deepEqual(onByDefault, ['paint-brush-enable-effect'],
     `expected exactly fire to be enabled by default, got: ${onByDefault.join(', ')}`);
 });

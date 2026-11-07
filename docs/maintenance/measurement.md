@@ -102,8 +102,8 @@ against its budget lines (60 ms / 250 ms).
 | Effect count | 26 |
 | Bundle members | 70 = manifest `<file>` 70 (went from 74 to 70 on 2026-10-09 after deleting 4 icons nothing named; `img/scalable/actions/` has 5 left, each named by shipped text, guarded by `test/build-freshness.test.mjs`) |
 | Schema keys | main 7 / profile 163 |
-| Effects enabled by default | only `fire` (the only `true` among the 26 `<nick>-enable-effect`) |
-| Pre-warmed | on a clean config `warmedNicks = 1` (= fire). To test all 26 warmed you must edit the sandbox keyfile |
+| Effects enabled by default | only `paint-brush` (the only `true` among the 26 `<nick>-enable-effect`) |
+| Pre-warmed | on a clean config `warmedNicks = 1` (= paint-brush). To test all 26 warmed you must edit the sandbox keyfile |
 | Patch sites | 8 installs / 8 restores, both sides guarded |
 | Compatibility branch sites | 8 |
 | Sentinel symbols | 18 (11 functions + 2 accessors + 4 fields + 1 array check) |
