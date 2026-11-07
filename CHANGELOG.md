@@ -567,3 +567,29 @@ Evidence L0 `npm test` green this round (99 pass) and the bundle was rebuilt wit
 Cost     The main page now opens with a destructive action above the effect list. It is confirmed
          before it acts, and the group is titled "Defaults".
 Commit   4dfba5b
+
+### D-072 · 2026-11-07 · fix
+Symptom   `slugCandidates()` mapped each whitespace run to one dash, so a heading whose dropped
+          punctuation sat between two spaces — `🙏 Credits & Attribution`, `⚠️ Limitations & roadmap` —
+          slugged to a single dash here and to a double dash on the remote. The gate rejected an anchor
+          that resolves on GitHub and would have accepted the single-dash form that does not.
+Change    Every space now slugs to its own dash, which is what GitHub does; the raw-text candidates stay,
+          so the bogus-anchor control keeps its teeth and the docstring no longer claims run-collapsing.
+Evidence  Provoked: the same README links failed `test/docs-links.test.mjs` on `#-credits--attribution`
+          before the change and pass after (99 tests, 0 fail). The control case still rejects
+          `not-a-heading`, a bare section number, `5` and `哨兵清单-18-个符号`, so the matcher did
+          not become a pass-through. `npm run check:log` PASS.
+Cost      An anchor that was wrongly green can now fail the suite — which is the gate's job.
+Commit    9cf0c90
+
+### D-073 · 2026-11-07 · taste
+Symptom   The README pair had no table of contents, and Troubleshooting sat between Preferences and
+          Testing while the other two living forks put it after Testing — three forks of one project read
+          by three maps.
+Change    Both sides open with a generated table of contents under the four-part lead; Troubleshooting
+          moves after Testing, taking the fork order. No section text moved.
+Evidence  L0 2026-11-07 `npm test` green with the resolver of the previous entry, and `npm run
+          check:log` PASS; every relative link and `#anchor` in the tracked markdown resolves; the
+          layout audit reports this repository compliant.
+Cost      One section changes position; its anchor moved with it in the contents.
+Commit    8c39bcd
