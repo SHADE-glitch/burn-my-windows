@@ -547,4 +547,9 @@ Evidence L0: `npm run check` (syntax) and `npm test` (99 pass) on 2026-10-27; `n
          profile — no such profile exists on this machine.
 Cost     None; `replaceAll` is available in the GJS version this fork targets.
 Commit   0096df3
-
+### D-070 · 2026-11-07 · taste · v48
+Symptom  a fresh profile played Fire, which is not the effect the owner runs; there was also no way back to the shipped effect settings once a profile had been edited
+Change   Moved the active profile's values into the profile schema defaults (Paint Brush enabled, Fire off, glide tilt -0.2) and added a confirmed Restore Defaults action in the profile editor that resets every effect key and keeps the profile's constraints (application, window type, colour scheme, power mode, priority). The READMEs and `docs/maintenance/measurement.md` now say Paint Brush instead of Fire
+Evidence L0 `npm test` green this round (99 pass), including the guard that exactly one `<nick>-enable-effect` defaults to true; L1 the rebuilt bundle and schema were checked with `gsettings get` under `GSETTINGS_BACKEND=memory`; L2 unverified
+Cost     Every install now plays Paint Brush on a fresh profile. Dropping it means reverting both the schema defaults and the new row; the row itself is additive and can stay
+Commit   6e2a8ce
