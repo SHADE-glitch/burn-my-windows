@@ -13,11 +13,17 @@
 
 **解决什么** — 完整保留上游功能，同时修复那些难以复现、却会在长时间运行的会话中逐渐劣化的稳定性、资源管理与启动性能问题。
 
+<p align="center"><img src="docs/screenshots/overview.png" alt="Paint Brush 效果把窗口刷掉的瞬间" width="900"></p>
+
+<p align="center"><em><b>Paint Brush 效果</b> —— 窗口关闭的瞬间，被笔触一道道刷走。</em></p>
+
+<p align="center"><img src="docs/screenshots/demo.gif" alt="用画笔效果关闭一个窗口" width="900"></p>
+
+<p align="center"><em><b>动图内容：</b>关闭一个文本窗口，画笔效果横扫整个窗口，用笔触把它撕走。<b>展示的功能：</b>当前配置里启用的效果——也就是这个 fork 默认的效果——在窗口关闭时播放。</em></p>
+
 **怎么跑** — 克隆到 `~/.local/share/gnome-shell/extensions/burn-my-windows@local`，运行 `make` 重建 GResource 包与 `gschemas.compiled`，再 `gnome-extensions enable burn-my-windows@local`（Wayland 下需注销重登）。
 
 **去哪看** — 见 [AGENTS.md](AGENTS.md) 与 [MAINTENANCE.md](MAINTENANCE.md)。
-
-<p align="center"><img src="docs/screenshots/overview.png" alt="Paint Brush 效果把窗口刷掉的瞬间" width="900"></p>
 
 ## 📖 项目说明
 
@@ -32,10 +38,6 @@
 - **libadwaita 偏好设置**，带实时预览，每种特效都有独立设置页。
 - **34 种语言翻译**，包含简体与繁体中文。
 - **UPower / PowerProfiles 集成**（通过 D-Bus），支持感知电源状态的配置档。
-
-<p align="center"><img src="docs/screenshots/demo.gif" alt="用画笔效果关闭一个窗口" width="900"></p>
-
-<p align="center"><em><b>动图内容：</b>关闭一个文本窗口，画笔效果横扫整个窗口，用笔触把它撕走。<b>展示的功能：</b>当前配置里启用的效果——也就是这个 fork 默认的效果——在窗口关闭时播放。</em></p>
 
 ## 🧰 前置依赖
 
@@ -197,7 +199,6 @@ profile 目录与工作树与开跑前不是逐字节一致，它就拒绝报绿
 下面每一项改动在 [CHANGELOG.md](CHANGELOG.md) 里有逐提交记录：kind、证据层级与提交号，
 `npm run check:log` 会证明那份记录覆盖了窗口内每一笔动过 `extension.js` 或 `src/` 的提交。
 "怎么验"仍然只归 `MAINTENANCE.md` 管，三段内容互不复述。
-
 
 本分支在上游 v48 基线（`16ab10a`）之上新增维护提交。此处刻意不写死数量——
 `git rev-list --count 16ab10a..HEAD` 才是权威，写死的数字总会漂移。

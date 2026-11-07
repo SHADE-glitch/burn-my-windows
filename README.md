@@ -13,11 +13,17 @@ Disintegrate your windows with style.
 
 **What it solves** — It keeps the upstream feature set intact while fixing the latent stability, resource-management and startup-performance issues that degrade a long-running session.
 
+<p align="center"><img src="docs/screenshots/overview.png" alt="The Paint Brush effect erasing a window as it closes" width="900"></p>
+
+<p align="center"><em><b>The Paint Brush effect</b> — the window is torn away in brush strokes the moment it closes.</em></p>
+
+<p align="center"><img src="docs/screenshots/demo.gif" alt="A window closing with the paint-brush effect" width="900"></p>
+
+<p align="center"><em><b>In the clip:</b> a text window is closed and the paint-brush effect sweeps across it, tearing it away in brush strokes. <b>What it shows:</b> the effect enabled in the active profile — the one this fork ships as its default — playing on window close.</em></p>
+
 **How to run** — Clone into `~/.local/share/gnome-shell/extensions/burn-my-windows@local`, run `make` to rebuild the GResource bundle and `gschemas.compiled`, then `gnome-extensions enable burn-my-windows@local` (log out and back in on Wayland).
 
 **Where to look** — See [AGENTS.md](AGENTS.md) and [MAINTENANCE.md](MAINTENANCE.md).
-
-<p align="center"><img src="docs/screenshots/overview.png" alt="The Paint Brush effect erasing a window as it closes" width="900"></p>
 
 ## 📖 About
 
@@ -32,10 +38,6 @@ It is **not** affiliated with or endorsed by the upstream author. The fork keeps
 - **libadwaita preferences** with a live preview and a dedicated settings page per effect.
 - **34 translations**, including Simplified and Traditional Chinese.
 - **UPower / PowerProfiles integration** via D-Bus for power-aware profiles.
-
-<p align="center"><img src="docs/screenshots/demo.gif" alt="A window closing with the paint-brush effect" width="900"></p>
-
-<p align="center"><em><b>In the clip:</b> a text window is closed and the paint-brush effect sweeps across it, tearing it away in brush strokes. <b>What it shows:</b> the effect enabled in the active profile — the one this fork ships as its default — playing on window close.</em></p>
 
 ## 🧰 Prerequisites
 
@@ -217,7 +219,6 @@ Every divergence below is recorded commit-by-commit in [CHANGELOG.md](CHANGELOG.
 its evidence tier and its hash, and `npm run check:log` proves that record covers every commit in
 the window that touched `extension.js` or `src/`. `MAINTENANCE.md` still owns the how-to-verify
 half; this section and CHANGELOG.md do not copy each other.
-
 
 - **Crash fixes:** stale pointer in Incinerate/Pixel Wipe, `actor.height` clamp in Doom, null-pipeline guards in texture-binding callbacks, null `meta_window` guard, partial-enable rollback when `_doEnable()` throws, overview-clone cleanup scoped to the owning clone.
 - **Stability:** the end-of-animation handler no longer touches a window actor that has already been destroyed, which used to log three `has been already disposed` criticals per occurrence.
