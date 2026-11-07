@@ -553,3 +553,17 @@ Change   Moved the active profile's values into the profile schema defaults (Pai
 Evidence L0 `npm test` green this round (99 pass), including the guard that exactly one `<nick>-enable-effect` defaults to true; L1 the rebuilt bundle and schema were checked with `gsettings get` under `GSETTINGS_BACKEND=memory`; L2 unverified
 Cost     Every install now plays Paint Brush on a fresh profile. Dropping it means reverting both the schema defaults and the new row; the row itself is additive and can stay
 Commit   6e2a8ce
+
+### D-071 · 2026-11-07 · taste
+Symptom  D-070 put Restore Defaults in the profile editor, which sits behind the header's pencil
+         button and is not visible until it is opened — and every effect row already carries its
+         own "reset this effect's options" button, so the global one had to compete with those
+         from behind a flap.
+Change   Moved the Defaults group to the first group of the main preferences page, above the effect
+         selection and the effect list. The action and its confirmation are unchanged; only the
+         page it is on changed.
+Evidence L0 `npm test` green this round (99 pass) and the bundle was rebuilt with `make`; L1
+         unverified (no live preferences window opened in this session); L2 unverified.
+Cost     The main page now opens with a destructive action above the effect list. It is confirmed
+         before it acts, and the group is titled "Defaults".
+Commit   4dfba5b
