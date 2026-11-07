@@ -17,6 +17,8 @@ Disintegrate your windows with style.
 
 **Where to look** — See [AGENTS.md](AGENTS.md) and [MAINTENANCE.md](MAINTENANCE.md).
 
+<p align="center"><img src="docs/screenshots/overview.png" alt="The Fire effect burning a window away as it closes" width="900"></p>
+
 ## 📖 About
 
 This repository is a **personal maintenance fork** of [**Burn My Windows**](https://github.com/Schneegans/Burn-My-Windows) by **Simon Schneegans**, frozen at upstream **v48** and maintained locally under the UUID `burn-my-windows@local`.
@@ -30,6 +32,8 @@ It is **not** affiliated with or endorsed by the upstream author. The fork keeps
 - **libadwaita preferences** with a live preview and a dedicated settings page per effect.
 - **34 translations**, including Simplified and Traditional Chinese.
 - **UPower / PowerProfiles integration** via D-Bus for power-aware profiles.
+
+<p align="center"><img src="docs/screenshots/demo.gif" alt="A window closing with the Fire effect" width="900"></p>
 
 ## 🧰 Prerequisites
 

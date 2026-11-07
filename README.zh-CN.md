@@ -17,6 +17,8 @@
 
 **去哪看** — 见 [AGENTS.md](AGENTS.md) 与 [MAINTENANCE.md](MAINTENANCE.md)。
 
+<p align="center"><img src="docs/screenshots/overview.png" alt="Fire 效果把窗口烧掉的瞬间" width="900"></p>
+
 ## 📖 项目说明
 
 本仓库是 **Simon Schneegans** 的 [**Burn My Windows**](https://github.com/Schneegans/Burn-My-Windows) 的**个人维护分支**，冻结在上游 **v48** 版本，以 `burn-my-windows@local` 为 UUID 在本地维护。
@@ -30,6 +32,8 @@
 - **libadwaita 偏好设置**，带实时预览，每种特效都有独立设置页。
 - **34 种语言翻译**，包含简体与繁体中文。
 - **UPower / PowerProfiles 集成**（通过 D-Bus），支持感知电源状态的配置档。
+
+<p align="center"><img src="docs/screenshots/demo.gif" alt="用 Fire 效果关闭一个窗口" width="900"></p>
 
 ## 🧰 前置依赖
 
