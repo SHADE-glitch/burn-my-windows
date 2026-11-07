@@ -25,6 +25,23 @@ Disintegrate your windows with style.
 
 **Where to look** — See [AGENTS.md](AGENTS.md) and [MAINTENANCE.md](MAINTENANCE.md).
 
+---
+
+## 📖 Table of Contents
+
+- [📖 About](#-about)
+- [✨ Features](#-features)
+- [🧰 Prerequisites](#-prerequisites)
+- [📥 Installation](#-installation)
+- [🖱️ Usage](#️-usage)
+- [⚙️ Preferences](#️-preferences)
+- [🧪 Testing](#-testing)
+- [🆚 Changes vs upstream (v48)](#-changes-vs-upstream-v48)
+- [🛠️ Troubleshooting](#️-troubleshooting)
+- [🤝 Contributing](#-contributing)
+- [🙏 Credits & Attribution](#-credits--attribution)
+- [⚖️ License](#️-license)
+
 ## 📖 About
 
 This repository is a **personal maintenance fork** of [**Burn My Windows**](https://github.com/Schneegans/Burn-My-Windows) by **Simon Schneegans**, frozen at upstream **v48** and maintained locally under the UUID `burn-my-windows@local`.
@@ -131,6 +148,53 @@ which is also why it is **not translated**: it shows in English whatever your GN
 that already had a hand-written sentence keep theirs, and the effect header rows are deliberately left
 without one, because "Use the fire effect." under a row titled *Fire* explains nothing.
 
+## 🧪 Testing
+
+Three layers, always run in order. The full playbook — what each layer can and cannot prove
+and the rollback recipe — is in [MAINTENANCE.md](MAINTENANCE.md), which now routes the three
+long-term assets to `docs/maintenance/`: the private-API inventory
+([shell-internal-api.md](docs/maintenance/shell-internal-api.md)), the compatibility matrix
+([compat-matrix.md](docs/maintenance/compat-matrix.md)) and the measurement baselines
+([measurement.md](docs/maintenance/measurement.md)).
+
+```bash
+npm run check && npm test          # L0: static, seconds, no display needed
+./test/headless/run.sh all         # L1: real GNOME Shell in a sandbox, minutes
+./test/headless/run.sh 01          # after a GNOME bump: start here
+```
+
+| Layer | Proves | Cannot prove |
+|---|---|---|
+| **L0** static gates | stale compiled artifacts, the 26 effects registered in all 8 places, sentinel/patch bookkeeping, the take-over branch on a synthetic stack | any runtime behaviour |
+| **L1** headless probes | the 18 private APIs still exist on *this* GNOME, which compatibility branch is taken, shader/uniform resolution, real windows animating each effect, leak-free disable, `enable()` main-thread budget, `begin_work`/`end_work` balance on interrupted animations | smoothness, absolute GPU cost, whether an effect looks right |
+| **L2** real session | everything a human can see — after log out / log in | nothing, but it is not automatable |
+
+L1 is fully isolated: a private D-Bus socket, `GSETTINGS_BACKEND=memory`, scratch
+`XDG_CONFIG_HOME` / `XDG_DATA_HOME` / `XDG_RUNTIME_DIR`, and it refuses to report green
+unless `~/.config/dconf/user`, the profile directory and the working tree are
+byte-identical to before the run.
+
+## 🆚 Changes vs upstream (v48)
+
+This fork adds maintenance commits on top of the upstream v48 baseline (`16ab10a`).
+The count is deliberately not stated — `git rev-list --count 16ab10a..HEAD` is authoritative and a hardcoded number always drifts.
+Every divergence below is recorded commit-by-commit in [CHANGELOG.md](CHANGELOG.md) with its kind,
+its evidence tier and its hash, and `npm run check:log` proves that record covers every commit in
+the window that touched `extension.js` or `src/`. `MAINTENANCE.md` still owns the how-to-verify
+half; this section and CHANGELOG.md do not copy each other.
+
+- **Crash fixes:** stale pointer in Incinerate/Pixel Wipe, `actor.height` clamp in Doom, null-pipeline guards in texture-binding callbacks, null `meta_window` guard, partial-enable rollback when `_doEnable()` throws, overview-clone cleanup scoped to the owning clone.
+- **Stability:** the end-of-animation handler no longer touches a window actor that has already been destroyed, which used to log three `has been already disposed` criticals per occurrence.
+- **Resource leaks:** signal handlers in Aura Glow/Fire now respect the `_isConnected` guard; preferences teardown disconnects the exact connected window; `changed::active-profile` and the desktop interface settings are released on disable; idempotent `realize`.
+- **Performance / startup:** synchronous enable with a deferred retry as fallback; deferred-enable delay reduced from 4000 ms to 1000 ms; enabled effects *and* the profile match constraints cached per profile instead of being re-read on every animation; `common.glsl` decoded once per shell process instead of once per shader; shader pre-warm reuses the cached effect list instead of reading the same 26 keys a second time; effect presets built once per widget realize; idle shader pre-warm; cached UPower and PowerProfiles proxies.
+- **Power handling:** tolerate UPower being unavailable instead of throwing; a constrained power profile no longer matches when the daemon is absent — the proxy is now rejected when nobody owns the bus name, which is what makes that rule actually hold.
+- **GNOME 50 compatibility:** the private-API sentinel now also covers the symbols that are only used at runtime (`_mapWindowDone`, `_destroyWindowDone`, `_lookupIndex`, the `overlayEnabled`/`window_container` accessors, and the `WindowPreview`/`Workspace` instance fields), using the only predicates that do not raise false warnings on a working shell; comments corrected where they no longer described GNOME 50 (`Meta.disable_unredirect_for_display` no longer exists, the effects are not built lazily, and the pre-warm does not compile GLSL — verified, `get_pipeline()` is still `null` afterwards).
+- **Preferences:** colour buttons are set through `set_rgba()` instead of the deprecated `rgba` property, which removes the warning that was logged for all 29 of them on every dialog open; the widget-tree surgery that decorates the dialog now degrades with a logged warning instead of throwing while the dialog is still being built; each effect row resets its own options in one click; option rows fill in the description the setting itself already declares, read at runtime, which adds no new string to translate; and the menu's homepage / bug links, the About dialog's website / issue links and the changelog entry — the one the "what changed" toast opens after an update — point at this repository while the author credit, the licence and the donation and translation links stay upstream.
+- **Defaults:** the profile schema ships Paint Brush as the one enabled effect instead of upstream's Fire, and the profile editor gained a confirmed **Restore Defaults** action that resets every effect setting while keeping the profile's constraints.
+- **Migration:** async migration callback guarded against post-disable execution; profiles are no longer duplicated on a retried migration.
+- **Build:** restored the shader / UI / asset sources that had been lost and only existed inside the compiled bundle (74 of them at the time), and added a `Makefile` so the committed bundle and schemas can never sit behind their sources.
+- **Cleanup:** removed dead code (`getUIDir()`, `Shader._time`, commented `mushroom-8bit-enable` key) and four icons that nothing named, behind a standing check so the resource manifest cannot grow another one.
+
 ## 🛠️ Troubleshooting
 
 **I edited a `.js` file and nothing changed.** Disabling and re-enabling the extension does **not**
@@ -184,53 +248,6 @@ Deleting a profile file deletes that profile for good. There is no whole-profile
 button on each row is as far as it goes, and the commands above only clear the global keys.
 For the rollback ladder — from "just disable it" to "clean reinstall" — see
 [MAINTENANCE.md](MAINTENANCE.md) §9.
-
-## 🧪 Testing
-
-Three layers, always run in order. The full playbook — what each layer can and cannot prove
-and the rollback recipe — is in [MAINTENANCE.md](MAINTENANCE.md), which now routes the three
-long-term assets to `docs/maintenance/`: the private-API inventory
-([shell-internal-api.md](docs/maintenance/shell-internal-api.md)), the compatibility matrix
-([compat-matrix.md](docs/maintenance/compat-matrix.md)) and the measurement baselines
-([measurement.md](docs/maintenance/measurement.md)).
-
-```bash
-npm run check && npm test          # L0: static, seconds, no display needed
-./test/headless/run.sh all         # L1: real GNOME Shell in a sandbox, minutes
-./test/headless/run.sh 01          # after a GNOME bump: start here
-```
-
-| Layer | Proves | Cannot prove |
-|---|---|---|
-| **L0** static gates | stale compiled artifacts, the 26 effects registered in all 8 places, sentinel/patch bookkeeping, the take-over branch on a synthetic stack | any runtime behaviour |
-| **L1** headless probes | the 18 private APIs still exist on *this* GNOME, which compatibility branch is taken, shader/uniform resolution, real windows animating each effect, leak-free disable, `enable()` main-thread budget, `begin_work`/`end_work` balance on interrupted animations | smoothness, absolute GPU cost, whether an effect looks right |
-| **L2** real session | everything a human can see — after log out / log in | nothing, but it is not automatable |
-
-L1 is fully isolated: a private D-Bus socket, `GSETTINGS_BACKEND=memory`, scratch
-`XDG_CONFIG_HOME` / `XDG_DATA_HOME` / `XDG_RUNTIME_DIR`, and it refuses to report green
-unless `~/.config/dconf/user`, the profile directory and the working tree are
-byte-identical to before the run.
-
-## 🆚 Changes vs upstream (v48)
-
-This fork adds maintenance commits on top of the upstream v48 baseline (`16ab10a`).
-The count is deliberately not stated — `git rev-list --count 16ab10a..HEAD` is authoritative and a hardcoded number always drifts.
-Every divergence below is recorded commit-by-commit in [CHANGELOG.md](CHANGELOG.md) with its kind,
-its evidence tier and its hash, and `npm run check:log` proves that record covers every commit in
-the window that touched `extension.js` or `src/`. `MAINTENANCE.md` still owns the how-to-verify
-half; this section and CHANGELOG.md do not copy each other.
-
-- **Crash fixes:** stale pointer in Incinerate/Pixel Wipe, `actor.height` clamp in Doom, null-pipeline guards in texture-binding callbacks, null `meta_window` guard, partial-enable rollback when `_doEnable()` throws, overview-clone cleanup scoped to the owning clone.
-- **Stability:** the end-of-animation handler no longer touches a window actor that has already been destroyed, which used to log three `has been already disposed` criticals per occurrence.
-- **Resource leaks:** signal handlers in Aura Glow/Fire now respect the `_isConnected` guard; preferences teardown disconnects the exact connected window; `changed::active-profile` and the desktop interface settings are released on disable; idempotent `realize`.
-- **Performance / startup:** synchronous enable with a deferred retry as fallback; deferred-enable delay reduced from 4000 ms to 1000 ms; enabled effects *and* the profile match constraints cached per profile instead of being re-read on every animation; `common.glsl` decoded once per shell process instead of once per shader; shader pre-warm reuses the cached effect list instead of reading the same 26 keys a second time; effect presets built once per widget realize; idle shader pre-warm; cached UPower and PowerProfiles proxies.
-- **Power handling:** tolerate UPower being unavailable instead of throwing; a constrained power profile no longer matches when the daemon is absent — the proxy is now rejected when nobody owns the bus name, which is what makes that rule actually hold.
-- **GNOME 50 compatibility:** the private-API sentinel now also covers the symbols that are only used at runtime (`_mapWindowDone`, `_destroyWindowDone`, `_lookupIndex`, the `overlayEnabled`/`window_container` accessors, and the `WindowPreview`/`Workspace` instance fields), using the only predicates that do not raise false warnings on a working shell; comments corrected where they no longer described GNOME 50 (`Meta.disable_unredirect_for_display` no longer exists, the effects are not built lazily, and the pre-warm does not compile GLSL — verified, `get_pipeline()` is still `null` afterwards).
-- **Preferences:** colour buttons are set through `set_rgba()` instead of the deprecated `rgba` property, which removes the warning that was logged for all 29 of them on every dialog open; the widget-tree surgery that decorates the dialog now degrades with a logged warning instead of throwing while the dialog is still being built; each effect row resets its own options in one click; option rows fill in the description the setting itself already declares, read at runtime, which adds no new string to translate; and the menu's homepage / bug links, the About dialog's website / issue links and the changelog entry — the one the "what changed" toast opens after an update — point at this repository while the author credit, the licence and the donation and translation links stay upstream.
-- **Defaults:** the profile schema ships Paint Brush as the one enabled effect instead of upstream's Fire, and the profile editor gained a confirmed **Restore Defaults** action that resets every effect setting while keeping the profile's constraints.
-- **Migration:** async migration callback guarded against post-disable execution; profiles are no longer duplicated on a retried migration.
-- **Build:** restored the shader / UI / asset sources that had been lost and only existed inside the compiled bundle (74 of them at the time), and added a `Makefile` so the committed bundle and schemas can never sit behind their sources.
-- **Cleanup:** removed dead code (`getUIDir()`, `Shader._time`, commented `mushroom-8bit-enable` key) and four icons that nothing named, behind a standing check so the resource manifest cannot grow another one.
 
 ## 🤝 Contributing
 

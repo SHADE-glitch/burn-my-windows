@@ -25,6 +25,23 @@
 
 **去哪看** — 见 [AGENTS.md](AGENTS.md) 与 [MAINTENANCE.md](MAINTENANCE.md)。
 
+---
+
+## 📖 目录
+
+- [📖 项目说明](#-项目说明)
+- [✨ 功能特性](#-功能特性)
+- [🧰 前置依赖](#-前置依赖)
+- [📥 安装](#-安装)
+- [🖱️ 使用](#️-使用)
+- [⚙️ 偏好设置](#️-偏好设置)
+- [🧪 测试](#-测试)
+- [🆚 相对上游的改动（v48）](#-相对上游的改动v48)
+- [🛠️ 故障排查](#️-故障排查)
+- [🤝 参与贡献](#-参与贡献)
+- [🙏 致谢与来源说明](#-致谢与来源说明)
+- [⚖️ 许可证](#️-许可证)
+
 ## 📖 项目说明
 
 本仓库是 **Simon Schneegans** 的 [**Burn My Windows**](https://github.com/Schneegans/Burn-My-Windows) 的**个人维护分支**，冻结在上游 **v48** 版本，以 `burn-my-windows@local` 为 UUID 在本地维护。
@@ -125,6 +142,50 @@ rm -rf ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 原本已经手写过一句的行保持原样，而特效的标题行故意不留说明："Use the fire effect." 压在标题为
 *Fire* 的行下面，等于没说。
 
+## 🧪 测试
+
+三层，必须按顺序跑。完整手册——每层能证明什么、不能证明什么，以及回滚配方——在
+[MAINTENANCE.md](MAINTENANCE.md)，它如今把三张长期资产路由到 `docs/maintenance/`：私有 API
+清单（[shell-internal-api.md](docs/maintenance/shell-internal-api.md)）、兼容分支矩阵
+（[compat-matrix.md](docs/maintenance/compat-matrix.md)）与观测判据／当前基线
+（[measurement.md](docs/maintenance/measurement.md)）。
+
+```bash
+npm run check && npm test          # L0 静态：秒级，不需要显示器
+./test/headless/run.sh all         # L1 headless：真 GNOME Shell，沙箱内，分钟级
+./test/headless/run.sh 01          # GNOME 大版本升级后，从这里开始
+```
+
+| 层 | 能证明 | 不能证明 |
+|---|---|---|
+| **L0** 静态门 | 编译产物是否陈旧、26 个特效在 8 个登记点是否齐全、哨兵与补丁的簿记、合成栈帧下的接管分支 | 任何运行期行为 |
+| **L1** headless 探针 | 18 个私有 API 在**当前** GNOME 上是否实存、每条兼容分支实际走哪条、着色器与 uniform 解析、真窗口逐个特效播放、disable 无残留、`enable()` 阻塞主线程的预算、动画被打断时 `begin_work`/`end_work` 是否配平 | 流畅度、GPU 绝对成本、特效好不好看 |
+| **L2** 真实会话 | 人能看见的一切（需先注销重登） | 无可自动化 |
+
+L1 完全隔离：私有 D-Bus socket、`GSETTINGS_BACKEND=memory`、独立的
+`XDG_CONFIG_HOME` / `XDG_DATA_HOME` / `XDG_RUNTIME_DIR`；并且只要 `~/.config/dconf/user`、
+profile 目录与工作树与开跑前不是逐字节一致，它就拒绝报绿。
+
+## 🆚 相对上游的改动（v48）
+下面每一项改动在 [CHANGELOG.md](CHANGELOG.md) 里有逐提交记录：kind、证据层级与提交号，
+`npm run check:log` 会证明那份记录覆盖了窗口内每一笔动过 `extension.js` 或 `src/` 的提交。
+"怎么验"仍然只归 `MAINTENANCE.md` 管，三段内容互不复述。
+
+本分支在上游 v48 基线（`16ab10a`）之上新增维护提交。此处刻意不写死数量——
+`git rev-list --count 16ab10a..HEAD` 才是权威，写死的数字总会漂移。
+
+- **崩溃修复：** Incinerate/Pixel Wipe 的失效指针、Doom 的 `actor.height` 钳制、纹理绑定回调的空管线守卫、空 `meta_window` 守卫、`_doEnable()` 抛异常时回滚部分启用状态、概览克隆清理仅限所属克隆。
+- **稳定性：** 动画结束处理器不再触碰已被销毁的窗口 actor——此前每次命中都会打出 3 条 `has been already disposed` critical。
+- **资源泄漏：** Aura Glow/Fire 的信号处理器现遵循 `_isConnected` 守卫；偏好设置销毁时断开与确切窗口的连接；禁用时释放 `changed::active-profile` 与桌面 interface 设置对象；`realize` 幂等化。
+- **性能 / 启动：** 同步启用并以延迟重试兜底；延迟启用时长由 4000ms 降至 1000ms；启用特效**与配置档匹配约束**均按配置档缓存（而非每次动画重读）；`common.glsl` 每个 shell 进程只解码一次（而非每个着色器一次）；着色器预热复用已缓存的启用列表，不再把同样 26 个键读第二遍；特效预设每个 widget realize 只构建一次；空闲着色器预热；缓存 UPower 与 PowerProfiles 代理。
+- **电源处理：** UPower 不可用时容忍而非抛异常；守护进程缺失时受限电源配置档不再匹配——现在会在无人认领总线名时拒绝该代理，这条规则才真正成立。
+- **GNOME 50 兼容性：** 私有 API 哨兵现已覆盖仅在运行期使用的符号（`_mapWindowDone`、`_destroyWindowDone`、`_lookupIndex`、`overlayEnabled`/`window_container` 访问器，以及 `WindowPreview`/`Workspace` 的实例字段），且采用的谓词不会在正常 shell 上误报；纠正了若干已不再符合 GNOME 50 的注释（`Meta.disable_unredirect_for_display` 已不存在、特效并非延迟构造、预热**不**编译 GLSL——已验证，构造后 `get_pipeline()` 仍为 `null`）。
+- **偏好设置：** 颜色按钮改用 `set_rgba()` 而非已弃用的 `rgba` 属性，消除了每次打开对话框时为全部 29 个颜色按钮各打印一条的弃用告警；给对话框做装饰的那段控件树手术遇到缺失控件改为记一条 warn 后降级，不再在对话框还没建完时抛异常；每个特效行一键重置它自己的选项；选项行的说明句直接取该设置项本来就声明好的文本、运行时读出，不新增任何需要翻译的串；菜单的首页 / 反馈链接、About 的网站 / 问题链接，以及「View Changelog」那一项（版本更新后弹出的 toast 打开的就是它）都指回本仓库，而作者署名、许可证、捐赠与翻译队列的链接仍归上游。
+- **默认值：** profile schema 默认启用的特效从上游的 Fire 改为 Paint Brush；配置档编辑区新增带确认的 **Restore Defaults**，重置全部特效设置而保留配置档约束。
+- **迁移：** 异步迁移回调增加禁用后守卫；重试迁移时不再重复生成配置档。
+- **构建：** 从编译后的资源包里恢复出当初只剩在包里的那批着色器 / UI / 资源源文件（那时是 74 个），并新增 `Makefile`，让提交进仓库的 bundle 与 schema 不可能落后于它们的源文件。
+- **清理：** 移除死代码（`getUIDir()`、`Shader._time`、注释掉的 `mushroom-8bit-enable` 键），并删掉 4 个没有任何 shipped 文本指名的图标——资源清单里再多一个这种条目，常设检查就会红。
+
 ## 🛠️ 故障排查
 
 **改了 `.js` 却没变化。** 禁用再启用扩展**不会**重新导入模块——缓存的 ESModule 保留旧代码。
@@ -170,50 +231,6 @@ dconf reset -f /org/gnome/shell/extensions/burn-my-windows/   # 只影响全局�
 删掉一个 profile 文件就是永久删除那个配置档。没有"整个配置档一键恢复默认"——每行上那枚特效级重置
 按钮就是上限，上面那两条命令也只清全局键。从"先禁用试试"到"干净重装"
 的分级回滚配方见 [MAINTENANCE.md](MAINTENANCE.md) §9。
-
-## 🧪 测试
-
-三层，必须按顺序跑。完整手册——每层能证明什么、不能证明什么，以及回滚配方——在
-[MAINTENANCE.md](MAINTENANCE.md)，它如今把三张长期资产路由到 `docs/maintenance/`：私有 API
-清单（[shell-internal-api.md](docs/maintenance/shell-internal-api.md)）、兼容分支矩阵
-（[compat-matrix.md](docs/maintenance/compat-matrix.md)）与观测判据／当前基线
-（[measurement.md](docs/maintenance/measurement.md)）。
-
-```bash
-npm run check && npm test          # L0 静态：秒级，不需要显示器
-./test/headless/run.sh all         # L1 headless：真 GNOME Shell，沙箱内，分钟级
-./test/headless/run.sh 01          # GNOME 大版本升级后，从这里开始
-```
-
-| 层 | 能证明 | 不能证明 |
-|---|---|---|
-| **L0** 静态门 | 编译产物是否陈旧、26 个特效在 8 个登记点是否齐全、哨兵与补丁的簿记、合成栈帧下的接管分支 | 任何运行期行为 |
-| **L1** headless 探针 | 18 个私有 API 在**当前** GNOME 上是否实存、每条兼容分支实际走哪条、着色器与 uniform 解析、真窗口逐个特效播放、disable 无残留、`enable()` 阻塞主线程的预算、动画被打断时 `begin_work`/`end_work` 是否配平 | 流畅度、GPU 绝对成本、特效好不好看 |
-| **L2** 真实会话 | 人能看见的一切（需先注销重登） | 无可自动化 |
-
-L1 完全隔离：私有 D-Bus socket、`GSETTINGS_BACKEND=memory`、独立的
-`XDG_CONFIG_HOME` / `XDG_DATA_HOME` / `XDG_RUNTIME_DIR`；并且只要 `~/.config/dconf/user`、
-profile 目录与工作树与开跑前不是逐字节一致，它就拒绝报绿。
-
-## 🆚 相对上游的改动（v48）
-下面每一项改动在 [CHANGELOG.md](CHANGELOG.md) 里有逐提交记录：kind、证据层级与提交号，
-`npm run check:log` 会证明那份记录覆盖了窗口内每一笔动过 `extension.js` 或 `src/` 的提交。
-"怎么验"仍然只归 `MAINTENANCE.md` 管，三段内容互不复述。
-
-本分支在上游 v48 基线（`16ab10a`）之上新增维护提交。此处刻意不写死数量——
-`git rev-list --count 16ab10a..HEAD` 才是权威，写死的数字总会漂移。
-
-- **崩溃修复：** Incinerate/Pixel Wipe 的失效指针、Doom 的 `actor.height` 钳制、纹理绑定回调的空管线守卫、空 `meta_window` 守卫、`_doEnable()` 抛异常时回滚部分启用状态、概览克隆清理仅限所属克隆。
-- **稳定性：** 动画结束处理器不再触碰已被销毁的窗口 actor——此前每次命中都会打出 3 条 `has been already disposed` critical。
-- **资源泄漏：** Aura Glow/Fire 的信号处理器现遵循 `_isConnected` 守卫；偏好设置销毁时断开与确切窗口的连接；禁用时释放 `changed::active-profile` 与桌面 interface 设置对象；`realize` 幂等化。
-- **性能 / 启动：** 同步启用并以延迟重试兜底；延迟启用时长由 4000ms 降至 1000ms；启用特效**与配置档匹配约束**均按配置档缓存（而非每次动画重读）；`common.glsl` 每个 shell 进程只解码一次（而非每个着色器一次）；着色器预热复用已缓存的启用列表，不再把同样 26 个键读第二遍；特效预设每个 widget realize 只构建一次；空闲着色器预热；缓存 UPower 与 PowerProfiles 代理。
-- **电源处理：** UPower 不可用时容忍而非抛异常；守护进程缺失时受限电源配置档不再匹配——现在会在无人认领总线名时拒绝该代理，这条规则才真正成立。
-- **GNOME 50 兼容性：** 私有 API 哨兵现已覆盖仅在运行期使用的符号（`_mapWindowDone`、`_destroyWindowDone`、`_lookupIndex`、`overlayEnabled`/`window_container` 访问器，以及 `WindowPreview`/`Workspace` 的实例字段），且采用的谓词不会在正常 shell 上误报；纠正了若干已不再符合 GNOME 50 的注释（`Meta.disable_unredirect_for_display` 已不存在、特效并非延迟构造、预热**不**编译 GLSL——已验证，构造后 `get_pipeline()` 仍为 `null`）。
-- **偏好设置：** 颜色按钮改用 `set_rgba()` 而非已弃用的 `rgba` 属性，消除了每次打开对话框时为全部 29 个颜色按钮各打印一条的弃用告警；给对话框做装饰的那段控件树手术遇到缺失控件改为记一条 warn 后降级，不再在对话框还没建完时抛异常；每个特效行一键重置它自己的选项；选项行的说明句直接取该设置项本来就声明好的文本、运行时读出，不新增任何需要翻译的串；菜单的首页 / 反馈链接、About 的网站 / 问题链接，以及「View Changelog」那一项（版本更新后弹出的 toast 打开的就是它）都指回本仓库，而作者署名、许可证、捐赠与翻译队列的链接仍归上游。
-- **默认值：** profile schema 默认启用的特效从上游的 Fire 改为 Paint Brush；配置档编辑区新增带确认的 **Restore Defaults**，重置全部特效设置而保留配置档约束。
-- **迁移：** 异步迁移回调增加禁用后守卫；重试迁移时不再重复生成配置档。
-- **构建：** 从编译后的资源包里恢复出当初只剩在包里的那批着色器 / UI / 资源源文件（那时是 74 个），并新增 `Makefile`，让提交进仓库的 bundle 与 schema 不可能落后于它们的源文件。
-- **清理：** 移除死代码（`getUIDir()`、`Shader._time`、注释掉的 `mushroom-8bit-enable` 键），并删掉 4 个没有任何 shipped 文本指名的图标——资源清单里再多一个这种条目，常设检查就会红。
 
 ## 🤝 参与贡献
 
