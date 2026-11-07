@@ -77,8 +77,8 @@ rm -rf ~/.local/share/gnome-shell/extensions/burn-my-windows@local
 - **单特效：** 启用开关、动画时长及特效专属参数（颜色、缩放、速度等）。
 - **配置档：** 按应用、动画类型、窗口类型、配色方案、电源模式与电源配置档匹配。
 
-默认值就是**本 fork 自己的选择**：新建配置档默认启用 **Paint Brush**，Fire 关闭。配置档编辑区
-末尾有 **Restore Defaults**，把每个特效设置恢复成这些值，同时保留配置档自己的约束
+默认值就是**本 fork 自己的选择**：新建配置档默认启用 **Paint Brush**，Fire 关闭。偏好设置窗口
+第一组就是 **Restore Defaults**，把每个特效设置恢复成这些值，同时保留配置档自己的约束
 （应用、窗口类型、优先级）。
 
 偏好对话框写两个地方。全局键落在 dconf 的 `/org/gnome/shell/extensions/burn-my-windows/`；

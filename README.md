@@ -78,8 +78,8 @@ Open **GNOME Settings → Extensions → Burn My Windows → Settings**. Pick an
 - **Profiles:** matching rules on app, animation type, window type, color scheme, power mode and power profile.
 
 The defaults are **this fork's own**: **Paint Brush** is the effect a fresh profile enables, Fire is
-off. The profile editor ends with **Restore Defaults**, which puts every effect setting back to those
-values and keeps the profile's constraints (application, window type, priority).
+off. The preferences window opens with **Restore Defaults**, which puts every effect setting back to
+those values and keeps the profile's constraints (application, window type, priority).
 
 The dialog writes two places. Global keys go to dconf under
 `/org/gnome/shell/extensions/burn-my-windows/`; **each profile is its own keyfile**,
