@@ -141,8 +141,9 @@ const OLD_HOME = new RegExp(
 
 /**
  * GitHub-style slug, tuned for headings that are Chinese and full of `：`, `（）`, `§` and
- * `→`. GitHub drops punctuation/symbols without inserting a space and maps each whitespace
- * run to a single dash; CJK letters survive because they are letters. Because the exact
+ * `→`. GitHub drops punctuation/symbols without inserting a space and maps **each**
+ * whitespace character to its own dash — so a dropped word between two spaces leaves a
+ * double dash; CJK letters survive because they are letters. Because the exact
  * drop-set is a moving target for full-width punctuation, a heading also contributes the
  * raw-text candidate (spaces to dashes, nothing dropped), which is what a reader pasting
  * the heading itself would produce. An anchor that matches no candidate of any heading in
@@ -156,7 +157,10 @@ function slugCandidates(headingText) {
     .trim();
   const lower = text.toLowerCase();
   const stripped = lower.replace(/[^\p{L}\p{N}\p{M}\p{Pc}\- ]+/gu, '');
-  const dashed = (s) => s.normalize('NFC').replace(/[\s\u00A0\u2000-\u2006\u2008-\u200A\u205F\u3000]+/g, '-');
+  // GitHub maps EVERY space to a hyphen, so a dropped word leaves a double dash
+  // (`🙏 Credits & Attribution` -> `-credits--attribution`); collapsing runs would reject
+  // anchors that resolve on the remote and accept a single-dash form that does not.
+  const dashed = (s) => s.normalize('NFC').replace(/[\s\u00A0\u2000-\u2006\u2008-\u200A\u205F\u3000]/g, '-');
   return [dashed(stripped), dashed(lower), dashed(text)];
 }
 
