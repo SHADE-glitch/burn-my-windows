@@ -13,13 +13,13 @@ Disintegrate your windows with style.
 
 **What it solves** — It keeps the upstream feature set intact while fixing the latent stability, resource-management and startup-performance issues that degrade a long-running session.
 
-<p align="center"><img src="docs/screenshots/overview.png" alt="The Paint Brush effect erasing a window as it closes" width="900"></p>
+<p align="center"><img src="docs/screenshots/overview.png" alt="The Paint Brush effect erasing a window as it closes" width="740"></p>
 
-<p align="center"><em><b>The Paint Brush effect</b> — the window is torn away in brush strokes the moment it closes.</em></p>
+<p align="center"><em><b>The Paint Brush effect</b> — a window being torn away in brush strokes as it closes.</em></p>
 
-<p align="center"><img src="docs/screenshots/demo.gif" alt="A window closing with the paint-brush effect" width="900"></p>
+<p align="center"><img src="docs/screenshots/demo.gif" alt="A window closing with the paint-brush effect" width="740"></p>
 
-<p align="center"><em><b>In the clip:</b> a text window is closed and the paint-brush effect sweeps across it, tearing it away in brush strokes. <b>What it shows:</b> the effect enabled in the active profile — the one this fork ships as its default — playing on window close.</em></p>
+<p align="center"><em><b>In the clip:</b> a window is closed; the Paint Brush effect sweeps across it and tears it into fragments, then the same window opens again to return to the opening state. <b>What it shows:</b> the effect this fork ships as its default — one of the shader-based window-close animations — played in full, with no settings dialog in the way.</em></p>
 
 **How to run** — Clone into `~/.local/share/gnome-shell/extensions/burn-my-windows@local`, run `make` to rebuild the GResource bundle and `gschemas.compiled`, then `gnome-extensions enable burn-my-windows@local` (log out and back in on Wayland).
 
