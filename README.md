@@ -13,13 +13,9 @@ Disintegrate your windows with style.
 
 **What it solves** — It keeps the upstream feature set intact while fixing the latent stability, resource-management and startup-performance issues that degrade a long-running session.
 
-<p align="center"><img src="docs/screenshots/overview.png" alt="The Paint Brush effect erasing a window as it closes" width="900"></p>
+<p align="center"><img src="docs/screenshots/demo.gif" alt="The incinerate effect burning a text window away as it closes" width="800"></p>
 
-<p align="center"><em><b>The Paint Brush effect</b> — the window is torn away in brush strokes the moment it closes.</em></p>
-
-<p align="center"><img src="docs/screenshots/demo.gif" alt="A window closing with the paint-brush effect" width="900"></p>
-
-<p align="center"><em><b>In the clip:</b> a text window is closed and the paint-brush effect sweeps across it, tearing it away in brush strokes. <b>What it shows:</b> the effect enabled in the active profile — the one this fork ships as its default — playing on window close.</em></p>
+<p align="center"><em><b>In the clip:</b> a text window is closed and the incinerate effect chews a ragged burning edge across it until nothing is left. <b>What it shows:</b> a close animation from the shipped effect set, playing on the window actor itself — not a fade, and not a screenshot of one.</em></p>
 
 **How to run** — Clone into `~/.local/share/gnome-shell/extensions/burn-my-windows@local`, run `make` to rebuild the GResource bundle and `gschemas.compiled`, then `gnome-extensions enable burn-my-windows@local` (log out and back in on Wayland).
 

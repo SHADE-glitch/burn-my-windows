@@ -13,13 +13,9 @@
 
 **解决什么** — 完整保留上游功能，同时修复那些难以复现、却会在长时间运行的会话中逐渐劣化的稳定性、资源管理与启动性能问题。
 
-<p align="center"><img src="docs/screenshots/overview.png" alt="Paint Brush 效果把窗口刷掉的瞬间" width="900"></p>
+<p align="center"><img src="docs/screenshots/demo.gif" alt="窗口关闭时被焚化效果从边缘烧掉" width="800"></p>
 
-<p align="center"><em><b>Paint Brush 效果</b> —— 窗口关闭的瞬间，被笔触一道道刷走。</em></p>
-
-<p align="center"><img src="docs/screenshots/demo.gif" alt="用画笔效果关闭一个窗口" width="900"></p>
-
-<p align="center"><em><b>动图内容：</b>关闭一个文本窗口，画笔效果横扫整个窗口，用笔触把它撕走。<b>展示的功能：</b>当前配置里启用的效果——也就是这个 fork 默认的效果——在窗口关闭时播放。</em></p>
+<p align="center"><em><b>动图内容：</b>关闭一个文本窗口，焚化效果从边缘啃出参差的焦痕，一路把窗口烧干净。<b>展示的功能：</b>随扩展出厂的效果集里的关闭动画，作用在窗口 actor 本体上——不是淡出，也不是一张动画截图。</em></p>
 
 **怎么跑** — 克隆到 `~/.local/share/gnome-shell/extensions/burn-my-windows@local`，运行 `make` 重建 GResource 包与 `gschemas.compiled`，再 `gnome-extensions enable burn-my-windows@local`（Wayland 下需注销重登）。
 
