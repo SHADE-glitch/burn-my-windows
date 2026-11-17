@@ -415,6 +415,11 @@ system for shell-private-API changes.
   is enabled — read the result after every push.
 
 ## Docs & commits
+- **Finishing a task includes its commit and its push.** The owner has given a standing decision for
+  both: code commit first, docs commit second, then push to `origin` (SSH, per the generated
+  section 6 above), and a task stops only when `git status` is clean and `git ls-remote` shows the
+  new head. No rebase, no history rewrite, no upstream merge without a decision for that exact
+  action.
 - `MAINTENANCE.md` is a **router**. The three long-term assets live under `docs/maintenance/`:
   `docs/maintenance/shell-internal-api.md` (§5/§7/§10), `docs/maintenance/compat-matrix.md` (§6) and
   `docs/maintenance/measurement.md` (§8/§12, plus the probe 06/07 methodology split out of
