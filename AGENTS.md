@@ -273,6 +273,31 @@ restructure upstream files.
   highest declared minimum is `[40, 0]`. Bump these only if an effect starts touching
   newer shell internals.
 
+## Upstream policy — radar, never merge
+
+This fork is frozen at upstream **v48** (`16ab10a`) and is **not** a tracking branch. The policy is
+**read upstream, never merge it**: keep the frozen baseline, and use upstream as an early-warning
+system for shell-private-API changes.
+
+- **Never** `git merge`, `git rebase`, `git cherry-pick` or `git pull` from `upstream`. The 8
+  monkey-patches, the sentinel tables and the L0/L1 evidence chain all assume this tree's own
+  history; a three-way merge moves the baseline without re-proving any of them.
+- **Run the radar quarterly and before every GNOME major upgrade** (the `upstream` remote exists
+  for exactly this — it is not a merge source):
+  ```sh
+  git fetch --unshallow upstream
+  git log --oneline upstream/main --since=2026-09-22
+  git diff --stat HEAD upstream/main -- extension.js prefs.js src schemas metadata.json
+  ```
+- **Take by hand, one hunk at a time:** a compatibility fix for a shell-private API this fork also
+  touches, or an upstream fix for a bug reproduced on this machine. Each one is re-proven at L0 and
+  — when it touches an animation path — at L1, and earns a `D-###` entry.
+- **Do not take:** upstream features, refactors and scaffolding (`AGENTS.md`, `docs/`, `test/`,
+  `.github/`), anything that would change the UUID or the settings schema id, and anything this fork
+  has already carried further than upstream did.
+- **Record** each pass (date, upstream head, what was screened out and why) in
+  `docs/reports/STATE.md`; only a change actually taken gets a `CHANGELOG.md` entry.
+
 ## Tests
 - **Three layers, always in order.** See `MAINTENANCE.md` §1 for what each one can prove.
   - **L0** `npm run check && npm test` — seconds, no display. `check` is `node --check`

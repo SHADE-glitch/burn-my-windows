@@ -659,3 +659,37 @@ Evidence  `python3 ~/.agents/scripts/render_standards.py --check .` reports the 
 Cost      `AGENTS.md` grows by about 10.5 KB, paid on every session read; the copy can drift, so the
           drift check is the only thing keeping it honest and it exists only on this machine.
 Commit    dc50f16
+
+### D-079 · 2026-11-17 · fix
+
+Symptom   The free-shader pool lived on each ShaderFactory instance, while the effect shader
+          classes are registered once per shell session and never unregistered. Locking the screen
+          disables and re-enables every extension, so those classes kept the first enable()'s
+          factories alive and every shader created afterwards was returned to one of them, where it
+          could never be handed out again -- the pool grew with each animation instead of settling.
+Change    Moved the pool to a module-global map keyed by effect nick, added
+          ShaderFactory.freeAll() and called it from _doDisable(), and resolved the array per nick
+          at call time so a class registered before a clear() lands in the new pool rather than the
+          one it captured at registration. Taken by hand from upstream v49 (67df547); this fork is
+          frozen at v48 and does not merge upstream.
+Evidence  L0 `npm test` 101/101 and `npm run check:log` PASS; L1 probes 01 (13/13), 02 (10/10,
+          shaderPoolBalances included) and 04 (25/25) PASS. Probe 01's line anchor moved with the
+          file and probe 02 reads the shared pool through the `_freeShaders` getter, so neither
+          assertion was relaxed to make the new shape green.
+Cost      One map lookup per shader checkout and one global clear per disable. The pool is no
+          longer per instance, so two factories of the same nick share one pool -- intended, the
+          key is the nick.
+Commit    8d036d3
+
+### D-080 · 2026-11-17 · fix
+
+Symptom   The two KWin branches of common.glsl initialised uSize and iTexCoord at global scope,
+          which OpenGL ES forbids, so those shaders could not compile on a GLES context.
+Change    Both initialisers became #define, the shape upstream v49 uses (17c300d).
+          resources/burn-my-windows.gresource is regenerated in the same commit, because this
+          repository ships the compiled resource and the freshness gate reads it.
+Evidence  `make` rebuilt the bundle; L0 `npm test` 101/101 including build-freshness (bundle
+          member hashes against their sources) and `npm run check:log` PASS. The KWin path itself
+          cannot run on this machine -- this is a source-level fix only.
+Cost      Nothing on the GNOME path: these two branches are compiled by KWin alone.
+Commit    0fd17c4
