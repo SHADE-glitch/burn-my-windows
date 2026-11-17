@@ -2,7 +2,7 @@
 //          )                                                   (                       //
 //       ( /(   (  (               )    (       (  (  (         )\ )    (  (            //
 //       )\()) ))\ )(   (         (     )\ )    )\))( )\  (    (()/( (  )\))(  (        //
-//      ((_)\ /((_|()\  )\ )      )\  '(()/(   ((_)()((_) )\ )  ((_)))\((_)()\ )\       //
+//      ((_)\ /((_|()\  )\ )      )\  '(()/(   ((_)()((_) )\ )  ((_)))\\((_)()\ )\       //
 //      | |(_|_))( ((_)_(_/(    _((_))  )(_))  _(()((_|_)_(_/(  _| |((_)(()((_|(_)      //
 //      | '_ \ || | '_| ' \))  | '  \()| || |  \ V  V / | ' \)) _` / _ \ V  V (_-<      //
 //      |_.__/\_,_|_| |_||_|   |_|_|_|  \_, |   \_/\_/|_|_||_|\__,_\___/\_/\_//__/      //
@@ -24,15 +24,32 @@ import {Shader} from './Shader.js';
 // possible in order to avoid memory leaks.                                             //
 //////////////////////////////////////////////////////////////////////////////////////////
 
+// The unused shaders live in this module-global cache, shared by every ShaderFactory.
+// This is required because GNOME Shell disables and re-enables all extensions whenever
+// the screen is locked and unlocked: each cycle constructs new ShaderFactory instances,
+// while the GObject classes registered below belong to the shell session and are never
+// unregistered. With the cache owned by the instances, those classes kept the factories
+// of the very first enable() alive forever, and every shader created after a lock/unlock
+// was returned to one of those leaked factories, where it could never be re-used -- a GPU
+// leak with every window animation.
+//
+// The array is looked up at call time for the same reason: freeAll() drops the entries,
+// and a class that is already registered must then land in the *new* array, not in the
+// one it captured at registration time.
+const _freeShaders = new Map();
+
+function freeShadersFor(nick) {
+  if (!_freeShaders.has(nick)) {
+    _freeShaders.set(nick, []);
+  }
+  return _freeShaders.get(nick);
+}
+
 export default class ShaderFactory {
 
   // Creates a new ShaderFactory. Requires the nick of the effect and a callback function
   // which will be called whenever a new shader is created.
   constructor(nick, setupFunc) {
-    // The _freeShaders array contains previously created shaders which are not currently
-    // in use.
-    this._freeShaders = [];
-
     // The nick of the effect is required when creating new shaders as it's part of the
     // GLSL source code file name.
     this._nick = nick;
@@ -43,15 +60,31 @@ export default class ShaderFactory {
 
   // ---------------------------------------------------------------- API for extension.js
 
+  // Drops every currently unused shader of every effect so that it can be collected.
+  // Called from _doDisable(): the pool is the only place a shader survives a disable()
+  // that has no actor left to own it.
+  static freeAll() {
+    _freeShaders.clear();
+  }
+
   // This is called from extension.js whenever a window is opened or closed. It returns an
   // instance of the shader class, trying to reuse previously created shaders. If a new
   // shader instance is required, it calls creates a new one and calls the setupFunc
   // thereafter.
+  // The pool is shared per effect nick. Exposing it under the historical name keeps the
+  // headless probes' observable (`.length`) pointed at the real pool, not at a copy of
+  // it: a probe measuring a look-alike would stay green while the real pool leaked.
+  get _freeShaders() {
+    return freeShadersFor(this._nick);
+  }
+
   getShader() {
     let shader;
 
+    const freeShaders = this._freeShaders;
+
     // If there are currently no free shaders, we have to create a new one.
-    if (this._freeShaders.length == 0) {
+    if (freeShaders.length == 0) {
 
       // Since Shell.GLSLEffect caches the shader source per class (not per instance), we
       // have to derive a new shader type for each effect. The type name contains the nick
@@ -69,7 +102,7 @@ export default class ShaderFactory {
 
           // This can be called to mark this instance to be re-usable.
           returnToFactory() {
-            outerThis._freeShaders.push(this);
+            freeShadersFor(outerThis._nick).push(this);
           }
         });
       }
@@ -86,7 +119,7 @@ export default class ShaderFactory {
       this._setupFunc(shader);
 
     } else {
-      shader = this._freeShaders.pop();
+      shader = freeShaders.pop();
     }
 
     return shader;

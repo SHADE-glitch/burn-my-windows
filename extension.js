@@ -22,6 +22,7 @@ import {fromVersion26} from './src/migrate.js';
 import {ProfileManager} from './src/ProfileManager.js';
 import {WindowPicker} from './src/WindowPicker.js';
 import * as utils from './src/utils.js';
+import ShaderFactory from './src/ShaderFactory.js';
 
 import Apparition from './src/effects/Apparition.js';
 import AuraGlow from './src/effects/AuraGlow.js';
@@ -593,6 +594,12 @@ export default class BurnMyWindows extends Extension {
 
     // Free all effect resources.
     this._ALL_EFFECTS = [];
+
+    // And drop the shader pool itself. The pool is module-global (a lock/unlock cycle
+    // builds new factories while the registered GObject classes keep the old ones
+    // alive), so dropping _ALL_EFFECTS is not enough: without this line the unused
+    // shaders stay reachable, with their GPU resources, for the whole disabled period.
+    ShaderFactory.freeAll();
 
     // Drop the profile objects as well. Each entry holds a Gio.Settings *and* a
     // filtered copy of the effect list, so emptying _ALL_EFFECTS alone kept all 26

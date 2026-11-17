@@ -92,7 +92,7 @@
 			'utils.js:141   set_data takes a Cogl context':
 				Number(Config.PACKAGE_VERSION.split('.')[0]) >= 48,
 			'utils.js:198   Cogl.Color.from_string': typeof Cogl.Color.from_string === 'function',
-			'ShaderFactory.js:79  GObject.Object.new': typeof GObject.Object.new === 'function',
+			'ShaderFactory.js:111  GObject.Object.new': typeof GObject.Object.new === 'function',
 		};
 		for (const [k, v] of Object.entries(matrix)) H.rec(k, JSON.stringify(v));
 
@@ -113,7 +113,7 @@
 			'shellVersionIsAtLeast(48, "beta") now reports false; getImageResource() would take the pre-48 path');
 		H.chk('matrix.coglColorFromString', matrix['utils.js:198   Cogl.Color.from_string'] === true ?
 			true : 'parseColor would throw and effects would render black');
-		H.chk('matrix.gObjectNew', matrix['ShaderFactory.js:79  GObject.Object.new'] === true ?
+		H.chk('matrix.gObjectNew', matrix['ShaderFactory.js:111  GObject.Object.new'] === true ?
 			true : 'shaders would never be constructed');
 
 		H.done();
